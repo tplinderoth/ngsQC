@@ -1,0 +1,7 @@
+readCleaner
+*.o
+*.d
+/Debug/
+/Release/
+.project
+.cproject
