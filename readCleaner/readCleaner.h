@@ -54,7 +54,7 @@ bool isLowComplexityRead (const std::string& read_id, const std::vector<std::str
 int addLowComplexityRead (const std::string& read_header, std::vector<std::string>* flagged_reads); // insert read identifier into vector of low complexity reads
 void clearFileNames (std::string names [3]); // clears array of file names
 int deleteComplexityFiles (const std::string* dir, const std::string* lib, const bool pe); // delete complexity filter output files
-int deleteFailMessage(const char* file); // failure to delete file error message
+int deleteFailMessage(const std::string* file); // failure to delete file error message
 int setFinalCleaned (std::string fqfiles [3], const std::string& dir, const std::string* lib, const bool pe); // generate totally cleaned files
 int newFileName (std::string& oldname, const char* newname); // change name of file and set the oldname string to the new name
 
