@@ -362,70 +362,77 @@ int cutadapt::deleteTrimFiles (const std::string* dir, const std::string* lib, c
 }
 
 int deleteComplexityFiles (const std::string* dir, const std::string* lib, const bool pe) {
-	const char* file = NULL;
+	std::string file;
 	std::string prefix(*dir + "/" + *lib);
 
-	file = (prefix + "_complex_R1.fastq").c_str();
-	if (remove(file))
-		return deleteFailMessage(file);
+	file = prefix + "_complex_R1.fastq";
+	if (remove(file.c_str()))
+		return deleteFailMessage(&file);
 
 	if (pe)
 	{
-		file = (prefix + "_complex_R2.fastq").c_str();
-		if (remove(file))
-			return deleteFailMessage(file);
+		file.clear();
+		file = prefix + "_complex_R2.fastq";
+		if (remove(file.c_str()))
+			return deleteFailMessage(&file);
 	}
 
 	return 0;
 }
 
 int pear::deleteMergeFiles (const std::string* dir, const std::string* lib) {
-	const char* file = NULL;
+	std::string file;
 	std::string prefix(*dir + "/" + *lib);
 
-	file = (prefix + ".unassembled.forward.fastq").c_str();
-	if (remove(file))
-		return deleteFailMessage(file);
+	file = prefix + ".unassembled.forward.fastq";
+	if (remove(file.c_str()))
+		return deleteFailMessage(&file);
 
-	file = (prefix + ".unassembled.reverse.fastq").c_str();
-	if (remove(file))
-		return deleteFailMessage(file);
+	file.clear();
+	file = prefix + ".unassembled.reverse.fastq";
+	if (remove(file.c_str()))
+		return deleteFailMessage(&file);
 
-	file=(prefix + ".assembled.fastq").c_str();
-	if (remove(file))
-		return deleteFailMessage(file);
+	file.clear();
+	file = prefix + ".assembled.fastq";
+	if (remove(file.c_str()))
+		return deleteFailMessage(&file);
 
-	file=(prefix + ".discarded.fastq").c_str();
-	if (remove(file))
-		return deleteFailMessage(file);
+	file.clear();
+	file = prefix + ".discarded.fastq";
+	if (remove(file.c_str()))
+		return deleteFailMessage(&file);
 
 	return 0;
 }
 
 int bowtie2::deleteMappingFiles (const std::string * dir, const std::string* lib, const bool pe) {
-	const char* file = NULL;
+	std::string file;
 	std::string prefix(*dir + "/" + *lib);
 
 	// delete concordantly mapped paired read fastq files
 	if (pe)
 	{
-		file = (prefix + "_paired.1.fastq").c_str();
-		if (remove(file))
-			return deleteFailMessage(file);
-		file = (prefix + "_paired.2.fastq").c_str();
-		if (remove(file))
-			return deleteFailMessage(file);
+		file = prefix + "_paired.1.fastq";
+		if (remove(file.c_str()))
+			return deleteFailMessage(&file);
+		file.clear();
+		file = prefix + "_paired.2.fastq";
+		if (remove(file.c_str()))
+			return deleteFailMessage(&file);
 	}
 
 	// delete SAM file
-	file = (prefix + ".sam").c_str();
-	if (remove(file))
-		return deleteFailMessage(file);
+	if (!file.empty())
+		file.clear();
+	file = prefix + ".sam";
+	if (remove(file.c_str()))
+		return deleteFailMessage(&file);
 
 	return 0;
 }
 
-int deleteFailMessage(const char* file) {
+int deleteFailMessage(const std::string* file) {
 	std::cerr << "Could not delete temporary file " << file << "\n";
 	return -1;
 }
