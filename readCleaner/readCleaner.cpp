@@ -315,9 +315,10 @@ int superdeduper::rmvDuplicates (std::string infiles [3], const int nfiles, cons
 
 void superdeduper::dupFastqOut (std::string names [3], const std::string* outdir, const std::string* lib, const bool pe) {
 	clearFileNames(names);
-	names[0] = *outdir + "/" + *lib + "_nodup_PE1.fastq";
+	std::string prefix(*outdir + "/" + *lib);
+	names[0] = prefix + "_nodup_PE1.fastq";
 	if (pe)
-		names[1] = *outdir + "/" + *lib + "_nodup_PE2.fastq";
+		names[1] = prefix + "_nodup_PE2.fastq";
 }
 
 int superdeduper::deleteDupFiles (const std::string* dir, const std::string* lib, const bool pe) {
@@ -361,15 +362,16 @@ int cutadapt::deleteTrimFiles (const std::string* dir, const std::string* lib, c
 }
 
 int deleteComplexityFiles (const std::string* dir, const std::string* lib, const bool pe) {
-	const char* file;
+	const char* file = NULL;
+	std::string prefix(*dir + "/" + *lib);
 
-	file = (*dir + "/" + *lib + "_complex_R1.fastq").c_str();
+	file = (prefix + "_complex_R1.fastq").c_str();
 	if (remove(file))
 		return deleteFailMessage(file);
 
 	if (pe)
 	{
-		file = (*dir + "/" + *lib + "_complex_R2.fastq").c_str();
+		file = (prefix + "_complex_R2.fastq").c_str();
 		if (remove(file))
 			return deleteFailMessage(file);
 	}
@@ -378,7 +380,7 @@ int deleteComplexityFiles (const std::string* dir, const std::string* lib, const
 }
 
 int pear::deleteMergeFiles (const std::string* dir, const std::string* lib) {
-	const char* file;
+	const char* file = NULL;
 	std::string prefix(*dir + "/" + *lib);
 
 	file = (prefix + ".unassembled.forward.fastq").c_str();
@@ -401,7 +403,7 @@ int pear::deleteMergeFiles (const std::string* dir, const std::string* lib) {
 }
 
 int bowtie2::deleteMappingFiles (const std::string * dir, const std::string* lib, const bool pe) {
-	const char* file;
+	const char* file = NULL;
 	std::string prefix(*dir + "/" + *lib);
 
 	// delete concordantly mapped paired read fastq files
