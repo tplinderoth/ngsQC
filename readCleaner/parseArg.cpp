@@ -253,10 +253,10 @@ void parseArg::helpinfo (const char* version) {
 	int w = 14;
 	std::cerr << "readCleaner version " << version << "\n";
 	std::cerr << "\nUsage: readCleaner [arguments]\n"
-	<< "\nEXECUTABLE DEPENDECIES:\n"
+	<< "\nEXECUTABLE DEPENDENCIES:\n"
 	<< "super_deduper, cutadapt, pear, bowtie2, fastqc (optional)\n"
 	<< "Note: Program executable names should be exactly as listed above\n"
-	<< "JAR DEPENDCIES:\n"
+	<< "\nJAR DEPENDENCIES:\n"
 	<< "trimmomatic\n"
 	<< "\nINPUT:"
 	<< "\n" << std::setw(w) << std::left << "-fastqdir" << std::setw(w) << "<string>" << "Directory containing fastq files [" << _fqdir << "]"
