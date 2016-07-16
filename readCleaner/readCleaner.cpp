@@ -43,9 +43,8 @@ int main (int argc, char** argv) {
 }
 
 int depCheck (int doqual) {
-
+	// check for executables
 	const char* exec = NULL;
-
 	if (system("which super_deduper"))
 		exec = "super_deduper";
 	if (system("which cutadapt"))
@@ -56,6 +55,8 @@ int depCheck (int doqual) {
 		exec = "bowtie2";
 	if (system("which bowtie2-build"))
 		exec = "bowtie2-build";
+	if (system("which java"))
+		exec = "java";
 	if (doqual)
 	{
 		if (system("which fastqc"))
@@ -65,7 +66,7 @@ int depCheck (int doqual) {
 	if (exec)
 	{
 		std::cerr << "Dependency '"<< exec << "' is not executable\n";
-		return 1;
+		return -1;
 	}
 
 	return 0;
@@ -157,13 +158,24 @@ int cleanFastq (parseArg* userarg) {
 		if (superdeduper::deleteDupFiles(&scratchdir, &lib, ispair))
 			return -1;
 
+		// trim for quality
+		if(trimmomatic::qualityTrim(fqfiles, nfiles, userarg->trimjar(), userarg->minquality(), userarg->minlength(), userarg->nthreads(), userarg->phred_offset(), &scratchdir, &lib, ispair))
+		{
+			std::cerr << "Trimming low quality bases for library " << lib << " failed\n";
+			return -1;
+		}
+		if (ispair)
+			++nfiles;
+		if (cutadapt::deleteTrimFiles(&scratchdir, &lib, ispair))
+			return -1;
+
 		// filter low complexity reads
-		if (filterComplexity(fqfiles, userarg->dust(), &scratchdir, &lib, ispair))
+		if (filterComplexity(fqfiles, nfiles, userarg->dust(), &scratchdir, &lib, ispair))
 		{
 			std::cerr << "Removing low complexity reads from library " << lib << " failed\n";
 			return -1;
 		}
-		if (cutadapt::deleteTrimFiles(&scratchdir, &lib, ispair))
+		if (trimmomatic::deleteQualityTrimFiles(&scratchdir, &lib, ispair))
 			return -1;
 
 		// merge overlapping reads
@@ -174,7 +186,6 @@ int cleanFastq (parseArg* userarg) {
 				std::cerr << "Merging reads for library " << lib << " failed\n";
 				return -1;
 			}
-			++nfiles;
 
 			if (deleteComplexityFiles(&scratchdir, &lib, ispair))
 				return -1;
@@ -498,7 +509,160 @@ int cutadapt::trimAdapters (std::string infiles [3], const int nfiles, const std
 	return rv;
 }
 
-int filterComplexity (std::string infiles [3], const double dustcutoff, const std::string* outdir, const std::string* lib, const bool pe) {
+int trimmomatic::qualityTrim (std::string infiles [3], const int nfiles, const std::string& trimmomatic_jar, const int minqual, const int minlen,
+		const int nthreads, const int phred, const std::string* outdir, const std::string* lib, const bool pe) {
+	static std::stringstream trimQualityCommand;
+	static std::string outfiles [4];
+	const int window_size = 4;
+	std::string phredbase = phred == 33 ? "-phred33" : "-phred64";
+
+	// check that input files are complete
+	if (emptyFiles(infiles, nfiles))
+		return -1;
+
+	// set output file names
+	if(!setQualityOutputNames(outfiles, outdir, lib, pe))
+		return -1;
+
+	// prepare quality trimming command
+	if (!trimQualityCommand.str().empty())
+	{
+		trimQualityCommand.clear();
+		trimQualityCommand.str(std::string());
+	}
+
+	if (pe)
+	{
+		trimQualityCommand << "java -jar " << trimmomatic_jar << " PE -quiet -threads " << nthreads << " " << phredbase
+				<< " " << infiles[0] << " " << infiles[1] << " " << outfiles[0] << " " << outfiles[1] << " " << outfiles[2]
+				<< " " << outfiles[3] << " SLIDINGWINDOW:" << window_size << ":" << minqual << " MINLEN:" << minlen;
+	}
+	else
+	{
+		trimQualityCommand << "java -jar " << trimmomatic_jar << "SE -quiet -threads " << nthreads << " " << phredbase << " " << infiles[0]
+		        << " " << outfiles[0] << " SLIDINGWINDOW:" << window_size << ":" << minqual << " MINLEN:" << minlen;
+	}
+
+	// trim reads for quality
+	std::cerr << trimQualityCommand.str() << "\n";
+	if (system(trimQualityCommand.str().c_str()))
+		return -1;
+
+
+	// merge unpaired files and set output file names
+	if (qtrimmedFileNames(infiles, outfiles, outdir, lib, pe))
+		return -1;
+
+	return 0;
+}
+
+int trimmomatic::qtrimmedFileNames (std::string newNames [3], const std::string trimOut [4], const std::string* dir, const std::string* lib, const bool pe) {
+	for (int i=0; i<3; ++i)
+	{
+		if (!newNames[i].empty())
+			newNames[i].clear();
+	}
+
+	std::string base = *dir + "/" + *lib;
+	if (pe)
+	{	// merge unpaired forward and reverse read files
+		newNames[2] = base + "_qtrim_u.fastq";
+		if(mergeUnpairedFiles(&trimOut[1], &trimOut[3], &newNames[2]))
+		{
+			std::cout << "Unable to merge " << trimOut[1] << " and " << trimOut[3] << "\n";
+			return -1;
+		}
+		newNames[0] = trimOut[0];
+		newNames[1] = trimOut[2];
+	}
+	else
+		newNames[0] = trimOut[0];
+
+	return 0;
+}
+
+int mergeUnpairedFiles (const std::string* infile1, const std::string* infile2, std::string* outfile) {
+	std::fstream fout;
+	std::fstream fin;
+
+	if (!getFILE(fout, infile1->c_str(), "out_app", true))
+		return -1;
+	if (!getFILE(fin, infile2->c_str(), "in", true))
+		return -1;
+
+	fout.seekp(0, std::ios_base::end);
+	fout << fin.rdbuf();
+
+	fout.close();
+	fin.close();
+
+	return outfile ? rename(infile1->c_str(), outfile->c_str()) : 0;
+}
+
+bool trimmomatic::setQualityOutputNames (std::string outfiles [4], const std::string* dir, const std::string* lib, const bool pe) {
+	if (dir->empty())
+	{
+		std::cerr << "Missing output directory name in call to setQualityOutputNames\n";
+		return false;
+	}
+	if (lib->empty())
+	{
+		return false;
+		std::cerr << "Missing library name in call to setQualityOutputNames\n";
+	}
+
+	for (int i=0; i<4; ++i)
+	{
+		if (!outfiles[i].empty())
+			outfiles[i].clear();
+	}
+
+	std::string base = *dir + *lib;
+	if (pe)
+	{
+		outfiles[0] = base + "_qtrim_paired_R1.fastq";
+		outfiles[1] = base + "_qtrim_unpaired_R1.fastq";
+		outfiles[2] = base + "_qtrim_paired_R2.fastq";
+		outfiles[3] = base + "_qtrim_unpaired_R2.fastq";
+	}
+	else
+		outfiles[0] = base + "_qtrim_R1.fastq";
+
+	return true;
+}
+
+int trimmomatic::deleteQualityTrimFiles (std::string* dir, std::string* lib, const bool pe) {
+	std::string file;
+	std::string base = *dir + "/" + *lib;
+	if (pe)
+	{
+		file = base + "_qtrim_paired_R1.fastq";
+		if (remove(file.c_str()))
+			return deleteFailMessage(&file);
+		file.clear();
+		file = base + "_qtrim_paired_R2.fastq";
+		if (remove(file.c_str()))
+			return deleteFailMessage(&file);
+		file.clear();
+		file = base + "_qtrim_unpaired_R2.fastq";
+		if (remove(file.c_str()))
+			return deleteFailMessage(&file);
+		file.clear();
+		file = base + "_qtrim_u.fastq";
+		if (remove(file.c_str()))
+			return deleteFailMessage(&file);
+	}
+	else
+	{
+		file = base + "_qtrim_R1.fastq";
+		if (remove(file.c_str()))
+			return deleteFailMessage(&file);
+	}
+
+	return 0;
+}
+
+int filterComplexity (std::string infiles [3], const int nfiles, const double dustcutoff, const std::string* outdir, const std::string* lib, const bool pe) {
 	std::fstream infile;
 	std::fstream outfile;
 	std::string outname(*outdir + "/" + *lib);
@@ -524,7 +688,7 @@ int filterComplexity (std::string infiles [3], const double dustcutoff, const st
 
 	// find low complexity reads in file1
 	std::cerr << "Finding low complexity reads in " << infiles[0] << " ...\n";
-	if (findLowComplexity(infile, outfile, &badreads, dustcutoff, true, &infiles[0]))
+	if (findLowComplexity(infile, outfile, &badreads, dustcutoff, true, true, &infiles[0]))
 		return -1;
 	infile.close();
 	outfile. close();
@@ -555,7 +719,7 @@ int filterComplexity (std::string infiles [3], const double dustcutoff, const st
 
 	std::cerr << "Finding low complexity reads in " << infiles[1] << " ...\n";
 	std::sort(badreads.begin(), badreads.end()); // flagged read vector must be sorted prior to calling findLowComplexity
-	if (findLowComplexity(infile, outfile, &badreads, dustcutoff, true, &infiles[1], &badreads2))
+	if (findLowComplexity(infile, outfile, &badreads, dustcutoff, true, true, &infiles[1], &badreads2))
 		return -1;
 	infile.close();
 	outfile.close();
@@ -578,7 +742,7 @@ int filterComplexity (std::string infiles [3], const double dustcutoff, const st
 	badreads.insert(badreads.end(), badreads2.begin(), badreads2.end());
 	std::sort(badreads.begin(), badreads.end());
 
-	if (findLowComplexity(infile, outfile, &badreads, dustcutoff, false, &fin_tmp))
+	if (findLowComplexity(infile, outfile, &badreads, dustcutoff, false, false, &fin_tmp))
 		return -1;
 
 	infile.close();
@@ -586,6 +750,25 @@ int filterComplexity (std::string infiles [3], const double dustcutoff, const st
 	// record read1 output name
 	infiles[0].clear();
 	infiles[0]=outname;
+
+	// find low complexity in unpaired reads
+	if (nfiles > 2)
+	{
+		std::cerr << "Finding low complexity reads in " << infiles[2] << " ...\n";
+		if (!getFILE(infile, infiles[2].c_str(), "in"))
+			return -1;
+		outname.clear();
+		outname = *outdir + "/" + *lib + "_complex_u.fastq";
+		if (!getFILE(outfile, outname.c_str(), "out"))
+			return -1;
+		badreads.clear();
+		if (findLowComplexity(infile, outfile, &badreads, dustcutoff, true, false, &infiles[2]) < 0)
+			return -1;
+		infile.close();
+		outfile.close();
+		infiles[2].clear();
+		infiles[2]=outname;
+	}
 
 	// delete temporary R1 file
 	if (remove(fin_tmp.c_str()))
@@ -615,7 +798,7 @@ int pear::mergeReads (std::string infiles [3], std::string* outdir, std::string*
 
 	mergeCommand << "pear -f " << infiles[0] << " -r " << infiles[1] << " -o " << outname << " -p " << pval << " -v " << min_overlap
 			<< " -m " << maxlength << " -n " << minlength << " -q " << qual_cutoff << " -u " << missing << " -g " << test << " -s " << score
-			<< " -b " << phredbase << " -c " << qualcap << " -j " << nthreads;
+			<< " -b " << phredbase << " -c " << qualcap << " -j " << nthreads << " -k";
 
 	std::cerr << mergeCommand.str() << "\n";
 
@@ -623,17 +806,28 @@ int pear::mergeReads (std::string infiles [3], std::string* outdir, std::string*
 	if (system(mergeCommand.str().c_str()))
 		return -1;
 
-	// set outfile names
-	mergeFastqOut(infiles, outdir, lib);
+	// merge unpaired read files set outfile names
+	if(mergeFastqOut(infiles, outdir, lib, infiles[2]))
+		return -1;
 
 	return 0;
 }
 
-void pear::mergeFastqOut (std::string files [3], const std::string* outdir, const std::string* lib) {
+int pear::mergeFastqOut (std::string files [3], const std::string* outdir, const std::string* lib, const std::string unpaired_file) {
 	clearFileNames(files);
-	files[0] += *outdir + "/" + *lib + ".unassembled.forward.fastq";
-	files[1] += *outdir + "/" + *lib + ".unassembled.reverse.fastq";
-	files[2] += *outdir + "/" + *lib + ".assembled.fastq";
+	std::string base = *outdir + "/" + *lib;
+	files[0] = base + ".unassembled.forward.fastq";
+	files[1] = base + ".unassembled.reverse.fastq";
+	files[2] = base + ".assembled.fastq";
+
+	if (!unpaired_file.empty())
+	{
+		// concatenate unpaired read files
+		if(mergeUnpairedFiles(&files[2], &unpaired_file))
+			return -1;
+	}
+
+	return 0;
 }
 
 int bowtie2::rmvContamination (std::string infiles [3], const int nfiles, const std::string& contamfile, const std::string* outdir, const std::string* lib, int phredbase, int nthreads, const bool pe) {
@@ -915,14 +1109,14 @@ int fastqc::qualityEvaluation (const std::string infiles [3], const std::string*
 }
 
 int findLowComplexity (std::fstream& infile, std::fstream& outfile, std::vector<std::string>* flagreads, const double cutoff,
-		const bool calcdust, const std::string* in_name, std::vector<std::string>* r2flag) {
+		const bool calcdust, const bool doflag, const std::string* in_name, std::vector<std::string>* r2flag) {
 	int rv = 0;
 
 	// check for empty input file
 	if (infile.peek() == std::ifstream::traits_type::eof())
 	{
 		std::cerr << *in_name << " is an empty file in call to findLowComplexity\n";
-		return -1;
+		return 1;
 	}
 
 	// find and flag low complexity reads
@@ -953,7 +1147,7 @@ int findLowComplexity (std::fstream& infile, std::fstream& outfile, std::vector<
 				// calculate DUST score and flag if low complexity
 				if (calcdust && seqstat::calcDustScore(seq) > cutoff)
 				{
-					if (addLowComplexityRead(fqline, r2flag ? r2flag : flagreads))
+					if (doflag && addLowComplexityRead(fqline, r2flag ? r2flag : flagreads))
 					{
 						std::cerr << "Couldn't flag low complexity read in file " << in_name << "\n";
 						return -1;

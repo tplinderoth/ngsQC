@@ -20,7 +20,7 @@ char * getCString (std::string s)
 }
 
 // getFILE is a wrapper for getting files
-bool getFILE(std::fstream &fp, const char* fname, const char* mode)
+bool getFILE(std::fstream &fp, const char* fname, const char* mode, bool binary)
 {
 	int writeFile = 0;
 	if (strcmp(mode, "out") == 0)
@@ -32,12 +32,21 @@ bool getFILE(std::fstream &fp, const char* fname, const char* mode)
 			return false;
 		}
 
-		fp.open(fname, std::ios::out);
+		fp.open(fname, binary ? std::ios_base::binary | std::ios_base::out : std::ios::out);
 	}
 	else if (strcmp(mode, "app") == 0)
-		fp.open(fname, std::ios::app);
+		fp.open(fname, binary ? std::ios_base::binary | std::ios_base::app : std::ios::app);
 	else if (strcmp(mode, "in") == 0)
-		fp.open(fname, std::ios::in);
+		fp.open(fname, binary ? std::ios_base::binary | std::ios_base::in : std::ios::in);
+	else if (strcmp(mode, "out_app") == 0)
+	{
+		fp.open(fname, binary ? std::ios_base::binary | std::ios_base::out | std::ios_base::app : std::ios_base::out | std::ios_base::app);
+	}
+	else
+	{
+		std::cerr << "Unrecognized file mode in call to getFILE\n";
+		return false;
+	}
 
 	if( !fp )
 	{

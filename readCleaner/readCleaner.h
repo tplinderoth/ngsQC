@@ -18,7 +18,7 @@
 #include "parseArg.h"
 #include <utility>
 
-const char* version = "0.0.1";
+const char* version = "0.0.2";
 
 typedef std::pair<std::string, std::string> adaptseq;
 
@@ -47,9 +47,9 @@ bool isForwardRead (const bfs::directory_iterator* iter); // checks if read is t
 int emptyFiles (const std::string fnames [3], const int nfiles); // check if paired files or unpaired file is empty
 int setFastqNames1 (std::string names [3], std::string file, const bool pe); // set input forward/reverse or unpaired fastq file names
 const std::string& readID (const std::string& read_header, std::string& read_id); // extracts unique part of read header
-int filterComplexity (std::string infiles [3], const double dustcutoff, const std::string* outdir, const std::string* lib, const bool pe); // filter out low complexity reads
+int filterComplexity (std::string infiles [3], const int nfiles, const double dustcutoff, const std::string* outdir, const std::string* lib, const bool pe); // filter out low complexity reads
 int findLowComplexity (std::fstream& infile, std::fstream& outfile, std::vector<std::string>* flagreads, const double cutoff,
-		const bool calcdust, const std::string* in_name, std::vector<std::string>* r2flag = NULL); // flag reads with high DUST score in a fastq file
+		const bool calcdust, const bool doflag, const std::string* in_name, std::vector<std::string>* r2flag = NULL); // flag reads with high DUST score in a fastq file
 bool isLowComplexityRead (const std::string& read_id, const std::vector<std::string>* flagged_reads); // checks if read is stored in vector of reads flagged as low complexity
 int addLowComplexityRead (const std::string& read_header, std::vector<std::string>* flagged_reads); // insert read identifier into vector of low complexity reads
 void clearFileNames (std::string names [3]); // clears array of file names
@@ -57,6 +57,7 @@ int deleteComplexityFiles (const std::string* dir, const std::string* lib, const
 int deleteFailMessage(const std::string* file); // failure to delete file error message
 int setFinalCleaned (std::string fqfiles [3], const std::string& dir, const std::string* lib, const bool pe); // generate totally cleaned files
 int newFileName (std::string& oldname, const char* newname); // change name of file and set the oldname string to the new name
+int mergeUnpairedFiles (const std::string* infile1, const std::string* infile2, std::string* outfile = NULL); // concatenate files
 
 namespace superdeduper {
 int rmvDuplicates (std::string infiles [3], const int nfiles, const std::string* outdir, const std::string* lib, const bool pe); // remove duplicate reads with super_deduper
@@ -72,9 +73,18 @@ void trimFastqOut (std::string a [3], std::string b [3]); // copies names from a
 int deleteTrimFiles (const std::string* dir, const std::string* lib, const bool pe); // delete temporary cutadapt files
 }
 
+namespace trimmomatic {
+int qualityTrim (std::string infiles [3], const int nfiles, const std::string& trimmomatic_jar, const int minqual, const int minlen,
+		const int nthreads, const int phred, const std::string* outdir, const std::string* lib, const bool pe); // trim low quality bases from reads
+bool setQualityOutputNames (std::string outfiles [4], const std::string* dir, const std::string* lib, const bool pe); // set trimmomatic outfile names
+int qtrimmedFileNames (std::string newNames [3], const std::string trimOut [4], const std::string* dir,
+		const std::string* lib, const bool pe); // merge unpaired read files and set trimmed fastq names
+int deleteQualityTrimFiles (std::string* dir, std::string* lib, const bool pe); // delete trimmomatic output
+}
+
 namespace pear {
 int mergeReads (std::string infiles [3], std::string* outdir, std::string* lib, int minlength, double missing, int phredbase, int nthreads); // merge overlapping paired end reads
-void mergeFastqOut (std::string files [3], const std::string* outdir, const std::string* lib); // set PEAR output fastq file names
+int mergeFastqOut (std::string files [3], const std::string* outdir, const std::string* lib, const std::string unpaired_file); // set PEAR output fastq file names
 int deleteMergeFiles (const std::string* dir, const std::string* lib); // delete temporary pear files
 }
 

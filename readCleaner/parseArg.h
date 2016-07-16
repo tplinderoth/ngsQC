@@ -26,6 +26,7 @@ public:
 	std::string outdir ()const ; // return _outdir
 	std::string contamfile () const; // return _contam
 	std::string adapter () const; // return _adapter
+	std::string trimjar () const; // return _trimjar
 	double missingThresh () const; // return _missing
 	double dust () const; // return _dust
 	int minlength () const; // return _minlen
@@ -44,6 +45,7 @@ private:
 	std::string _outdir; // output directory
 	std::string _contamf; // contaminants file
 	std::string _adapter; // type of adapter
+	std::string _trimjar; // trimmomatic executable
 	int _minqual; // minimum quality for read trimming
 	int _minlen; // minimum read length
 	double _dust; // low complexity threshold

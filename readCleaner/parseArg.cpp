@@ -111,6 +111,23 @@ int parseArg::getInput (const int c, char** v, const char* version) {
 				return -1;
 			}
 		}
+		else if (strcmp(v[argPos],"-trimjar") == 0)
+		{
+			_trimjar = v[argPos+1];
+			if (!_trimjar.empty())
+			{
+				if (!bfs::exists(_trimjar))
+				{
+					std::cerr << "Trimmomatic jar file " << _trimjar << " does not exist\n";
+					return -1;
+				}
+			}
+			else
+			{
+				std::cerr << "No Trimmomatic jar file supplied, check -trimjar\n";
+				return -1;
+			}
+		}
 		else if (strcmp(v[argPos],"-minqual") == 0)
 		{
 			_minqual = atoi(v[argPos+1]);
@@ -236,14 +253,17 @@ void parseArg::helpinfo (const char* version) {
 	int w = 14;
 	std::cerr << "readCleaner version " << version << "\n";
 	std::cerr << "\nUsage: readCleaner [arguments]\n"
-	<< "\nDEPENDENCIES:\n"
+	<< "\nEXECUTABLE DEPENDECIES:\n"
 	<< "super_deduper, cutadapt, pear, bowtie2, fastqc (optional)\n"
 	<< "Note: Program executable names should be exactly as listed above\n"
+	<< "JAR DEPENDCIES:\n"
+	<< "trimmomatic\n"
 	<< "\nINPUT:"
 	<< "\n" << std::setw(w) << std::left << "-fastqdir" << std::setw(w) << "<string>" << "Directory containing fastq files [" << _fqdir << "]"
 	<< "\n" << std::setw(w) << std::left << "-outdir" << std::setw(w) << "<string>" << "Directory to place cleaned fastq files in [" << _outdir << "]"
 	<< "\n" << std::setw(w) << std::left << "-contam" << std::setw(w) << "<string>" << "Fasta format file of potential contaminant sequences [" << _contamf << "]"
 	<< "\n" << std::setw(w) << std::left << "-adapter" << std::setw(w) << "<string>" << "Adapter type: truseq, nextera, smallrna [" << _adapter << "]"
+	<< "\n" << std::setw(w) << std::left << "-trimjar" << std::setw(w) << "<string>" << "Full path to Trimmomatic jar file ["  << _trimjar << "]"
 	<< "\n" << std::setw(w) << std::left << "-minqual" << std::setw(w) << "<int>" << "Minimum base quality for trimming ends of reads using BWA algorithm [" << _minqual << "]"
 	<< "\n" << std::setw(w) << std::left << "-minlength" << std::setw(w) << "<int>" << "Minimum read length [" << _minlen << "]"
 	<< "\n" << std::setw(w) << std::left << "-dust" << std::setw(w) << "<double>" << "Maximum read DUST score for removing low complexity reads [" << _dust << "]"
@@ -268,6 +288,8 @@ std::string parseArg::outdir () const {return _outdir;}
 std::string parseArg::contamfile () const {return _contamf;}
 
 std::string parseArg::adapter () const {return _adapter;}
+
+std::string parseArg::trimjar () const {return _trimjar;}
 
 double parseArg::missingThresh () const {return _missing;}
 
