@@ -386,6 +386,11 @@ int deleteComplexityFiles (const std::string* dir, const std::string* lib, const
 		file = prefix + "_complex_R2.fastq";
 		if (remove(file.c_str()))
 			return deleteFailMessage(&file);
+
+		file.clear();
+		file = prefix + "_complex_u.fastq";
+		if (remove(file.c_str()))
+			return deleteFailMessage(&file);
 	}
 
 	return 0;
