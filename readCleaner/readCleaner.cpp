@@ -617,7 +617,7 @@ bool trimmomatic::setQualityOutputNames (std::string outfiles [4], const std::st
 			outfiles[i].clear();
 	}
 
-	std::string base = *dir + *lib;
+	std::string base = *dir + "/" + *lib;
 	if (pe)
 	{
 		outfiles[0] = base + "_qtrim_paired_R1.fastq";
