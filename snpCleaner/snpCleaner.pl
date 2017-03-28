@@ -2,7 +2,7 @@
 
 # SNPcleaner.pl
 # Author: Tyler Linderoth, tylerp.linderoth@gmail.com
-my $version = "2.3.0";
+my $version = "2.4.0";
 
 # TODO:
 #    Add argument check
@@ -13,8 +13,10 @@ use warnings;
 use Getopt::Std;
 use IO::Compress::Bzip2;
 
-my %opts = ('d'=>2, 'D'=>1000000, 'k'=>1, 'u'=>0, 'a'=>2, 'Q'=>10, 'S'=>1e-4, 'b'=>1e-100, 'f'=>0, 'e'=>1e-4, 'h'=>1e-4, 'F'=>0, 'H'=>0, 'L'=>0, 'A'=>undef,
+my %opts = ('?'=> 0, 'd'=>2, 'D'=>1000000, 'k'=>1, 'u'=>0, 'a'=>2, 'Q'=>10, 'S'=>1e-4, 'b'=>1e-100, 'f'=>0, 'e'=>1e-4, 'h'=>1e-4, 'F'=>0, 'H'=>0, 'L'=>0, 'A'=>undef,
 	    'M'=>undef, 'B'=>undef, 'p'=>undef, 'r'=>undef, 'X'=>undef, 't'=>undef, 'g'=>undef, 'v'=>undef, '2'=>undef, 'q'=>2);
+
+getopts('?2d:D:k:u:a:Q:S:b:f:e:h:F:H:L:A:M:B:p:r:X:q:tgv', \%opts);
 
 die (qq/
 #####################
@@ -24,9 +26,12 @@ This scripts works with bcftools vcf file format to filter SNPs. This script is 
 SNP filtering and will ignore INDELs. 
 
 #######################################
-Usage: SNPcleaner.pl [options] <in.vcf>
+Usage: snpCleaner.pl [options] <in.vcf>
+or
+cat <in.vcf> | snpCleaner.pl
 
 Options:
+-?	 help
 -2	 keep non-biallelic sites
 -q INT   ploidy [$opts{q}]
 -d INT   minimum site read depth [$opts{d}]
@@ -65,10 +70,7 @@ It's recomended to use mpileup -I to ignore indels.
 Output Notes:
 Characters in front of filtered sites (dumped with option -p) indicate filters that the site
 failed to pass.
-\n/) unless (@ARGV);
-
-getopts('d:D:k:u:a:Q:S:b:f:e:h:F:H:L:A:M:B:p:r:X:q:tgv2', \%opts);
-
+\n/) if ($opts{'?'} || (!$ARGV[0] && -t STDIN));
 
 # Argument check
 if($opts{t} || $opts{g}) {
@@ -136,6 +138,13 @@ if($opts{X}) {
 
 my ($prev_contig, $cur_contig, $pos) = ('start','start',0);
 $" = "\t"; #for formatting printed output
+
+# check if input VCF is from @ARGV or STDIN
+if (-t STDIN)
+{
+	die ("No input VCF\n") unless @ARGV;
+}
+
 # The core loop
 while (<>) {
     my $violate = ''; # for flagging filter violations
