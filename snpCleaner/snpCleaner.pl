@@ -28,7 +28,7 @@ SNP filtering and will ignore INDELs.
 #######################################
 Usage: snpCleaner.pl [options] <in.vcf>
 or
-cat <in.vcf> | snpCleaner.pl
+cat <in.vcf> | snpCleaner.pl [options]
 
 Options:
 -?	 help
