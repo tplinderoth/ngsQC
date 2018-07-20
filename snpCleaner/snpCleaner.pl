@@ -2,7 +2,7 @@
 
 # SNPcleaner.pl
 # Author: Tyler Linderoth, tylerp.linderoth@gmail.com
-my $version = "2.4.0";
+my $version = "2.4.1";
 
 # TODO:
 #    Add argument check
@@ -68,7 +68,8 @@ samtools mpileup -f <reference fasta> -b <bam list> -u -t SP,DP | bcftools call 
 It's recomended to use mpileup -I to ignore indels.
 
 Output Notes:
-Characters in front of filtered sites (dumped with option -p) indicate filters that the site
+-bed format file is zero-based.
+-Characters in front of filtered sites (dumped with option -p) indicate filters that the site
 failed to pass.
 \n/) if ($opts{'?'} || (!$ARGV[0] && -t STDIN));
 
@@ -345,7 +346,7 @@ sub print_buffer {
 	
 	if( !$g->{'violate'} ){
 	    print($g->{'vcf'}."\n");
-	    print(BED $g->{'contig'}."\t".$g->{'pos'}."\t".($g->{'pos'}+1)."\n") if $opts{B};
+	    print(BED $g->{'contig'}."\t".$g->{'pos'}-1."\t".($g->{'pos'})."\n") if $opts{B};
 	}else{
 	    $bz2->print($g->{'violate'}."\t".$g->{'vcf'}."\n") if($opts{p});
 	}
