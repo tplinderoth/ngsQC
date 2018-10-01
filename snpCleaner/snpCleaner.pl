@@ -346,7 +346,7 @@ sub print_buffer {
 	
 	if( !$g->{'violate'} ){
 	    print($g->{'vcf'}."\n");
-	    print(BED $g->{'contig'}."\t".$g->{'pos'}-1."\t".($g->{'pos'})."\n") if $opts{B};
+	    print(BED $g->{'contig'}."\t".($g->{'pos'}-1)."\t".$g->{'pos'}."\n") if $opts{B};
 	}else{
 	    $bz2->print($g->{'violate'}."\t".$g->{'vcf'}."\n") if($opts{p});
 	}
