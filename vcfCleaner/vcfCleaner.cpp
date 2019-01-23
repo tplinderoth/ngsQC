@@ -276,11 +276,11 @@ int isMultiSNP (std::vector<std::string> &vcfvec) {
 	unsigned int i;
 
 	for (i=0; i<vcfvec[4].size(); ++i) {
-		if (vcfvec[4][i] == ':') return 1;
+		if (vcfvec[4][i] == ',') return 1;
 	}
 
 	for (i=0; i<vcfvec[3].size(); ++i) {
-		if (vcfvec[3][i] == ':') return 1;
+		if (vcfvec[3][i] == ',') return 1;
 	}
 
 	return 0;
