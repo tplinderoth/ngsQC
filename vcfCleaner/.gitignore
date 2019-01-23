@@ -1,0 +1,7 @@
+/Debug/
+.cproject
+.project
+.settings/
+*.o
+*.d
+vcfCleaner
