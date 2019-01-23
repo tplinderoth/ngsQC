@@ -86,8 +86,8 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	unsigned int minind = 1; // minimum number of individuals with data
 	double rms_mapq = 40.0; // min RMS mapping quality (MQ)
 	double mqRankSum = 12.5; // max absolute Wilcoxon rank sum test z-score of alt vs ref read map quality (MQRankSum)
-	double posbias = 60.0; // max absolute Wilcoxon rank sum test z-score of alt vs ref read position bias  (ReadPosRankSum)
-	double strandbias = 8.0; // max Phred-scale p-value using Fisher's exact test of strand bias (FS)
+	double posbias = 8.0; // max absolute Wilcoxon rank sum test z-score of alt vs ref read position bias  (ReadPosRankSum)
+	double strandbias = 60.0; // max Phred-scale p-value using Fisher's exact test of strand bias (FS)
 	double baseqbias = 21.0; // max absolute Wilcoxon rank sum test z-score of alt vs. ref base qualities (BaseQRankSum)
 	double varqual_depth = 2.0; // min variant Phred-scaled confidence/quality by depth (QD)
 	double hetexcess = 40.0; // max Phred-scaled p-value for exact test of excess heterozygosity (ExcessHet)
