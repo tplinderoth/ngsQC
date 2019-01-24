@@ -70,6 +70,7 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	<< std::setw(w1) << std::left << "-hetexcess" << std::setw(w2) << std::left << "FLOAT" << "Max Phred-scaled p-value for exact test of excess heterozygosity, H [" << hetexcess << "]\n"
 	<< "\nOther site QC fail flags:\n"
 	<< "F, Unkown reference allele\n"
+	<< "N, No data for any individuals\n"
 	<< "\n";
 }
 
@@ -168,8 +169,18 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 			badflags.push_back('N');
 
 		} else {
-			if (vcfvec[3].size() == 1 && vcfvec[4].size() == 1) {
+			if (vcfvec[3].size() > 1 || vcfvec[4].size() > 1 || vcfvec[4] == "*") {
+				if (isMultiSNP(vcfvec)) {
+					// multi-allelic
+					badflags.push_back('A');
+				} else {
+					// indel, *=deletion
+					badflags.push_back('I');
+				}
+			} else {
+				// site is a SNP
 				if (vcfvec[3] == "A" || vcfvec[3] == "C" || vcfvec[3] == "G" || vcfvec[3] == "T") {
+
 					if (allsites || vcfvec[4] != ".") {
 
 						// determine number of individuals with data
@@ -193,17 +204,10 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 						checkGatkInfo(infovec, i, &badflags, mincov, maxcov, rms_mapq, mqRankSum, posbias, strandbias,
 								baseqbias, varqual_depth, hetexcess);
 					}
+
 				} else {
 					// unknown reference allele
 					badflags.push_back('F');
-				}
-			} else {
-				if (isMultiSNP(vcfvec)) {
-					// multi-allelic
-					badflags.push_back('A');
-				} else {
-					// indel
-					badflags.push_back('I');
 				}
 			}
 		}
@@ -302,27 +306,6 @@ region* updateRegion (vcfrecord &site, region& goodpos, std::fstream& outstream)
 		std::cerr << "Positions in VCF do not appear to be in increasing order\n";
 		return NULL;
 	}
-
-	/*
-	 if (goodpos.start == 0) {
-		goodpos.makeNew(site.contig, site.pos);
-	} else if (site.pos - goodpos.end == 1) {
-		++goodpos.end;
-	} else if (site.pos - goodpos.end > 1 || site.contig != goodpos.contig) {
-		if (biallelic && goodpos.entries > 1) --goodpos.end;
-		if (goodpos.end >= goodpos.start) {
-			if(!goodpos.write(outstream)) return NULL;
-		}
-		goodpos.makeNew(site.contig, site.pos);
-	} else if (site.pos == goodpos.end && site.contig == goodpos.contig) {
-		++goodpos.entries;
-		if (biallelic && site.flags.find('A') == std::string::npos) site.flags.push_back('A');
-	} else {
-		std::cerr << "Positions in VCF do not appear to be in increasing order\n";
-		return NULL;
-	}
-	 *
-	 */
 
 	return &goodpos;
 }
