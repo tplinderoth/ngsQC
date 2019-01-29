@@ -1,21 +1,15 @@
 CXX = g++
 CXXFLAGS = -O3 -Wall
-CXXSRC = $(wildcard *.cpp)
-OBJ = $(CXXSRC:.cpp=.o)
-BIN = vcfCleaner
+BIN = vcfCleaner expandrf
 
 all: $(BIN)
 
-.PHONY: clean
-
--include $(OBJ:.o=.d)
-
-%.o: %.cpp
-	$(CXX) -c $(CXXFLAGS) $*.cpp
-	$(CXX) -MM $(CXXFLAGS) $*.cpp > $*.d
-
-$(BIN): $(OBJ)
-	$(CXX) $(CXXFLAGS) -o $(BIN) *.o
+vcfCleaner: vcfCleaner.cpp vcfCleaner.h
+	$(CXX) $(CXXFLAGS) vcfCleaner.cpp -o vcfCleaner
+expandrf: expandrf.cpp
+	$(CXX) $(CXXFLAGS) expandrf.cpp -o expandrf
 
 clean:
 	rm -f $(BIN) *.o *.d
+
+.PHONY: clean all
