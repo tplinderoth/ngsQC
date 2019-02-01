@@ -43,7 +43,7 @@ void maininfo () {
 }
 
 void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
-	unsigned int &minind, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
+	unsigned int &minind, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
 	double &varqual_depth, double &hetexcess) {
 
 	int w1=20;
@@ -66,6 +66,7 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	<< std::setw(w1) << std::left << "-posbias" << std::setw(w2) << std::left << "FLOAT" << "Max absolute Wilcoxon rank sum test Z-score of alt vs. ref read position bias, P [" << posbias << "]\n"
 	<< std::setw(w1) << std::left << "-strandbias" << std::setw(w2) << std::left << "FLOAT" << "Max Phred-scaled Fisher's exact test p-value of strand bias, S [" << strandbias << "]\n"
 	<< std::setw(w1) << std::left << "-baseqbias" << std::setw(w2) << std::left << "FLOAT" << "Max absolute Wilcoxon rank sum test Z-score of alt vs ref base qualities, B [" << baseqbias << "]\n"
+	<< std::setw(w1) << std::left << "-qual" << std::setw(w2) << std::left << "FLOAT" << "Min Phred-scaled quality score of ALT assertion, Q [" << qual << "]\n"
 	<< std::setw(w1) << std::left << "-varq_depth" << std::setw(w2) << std::left << "FLOAT" << "Min variant Phred-scaled confidence/quality by depth, V [" << varqual_depth << "]\n"
 	<< std::setw(w1) << std::left << "-hetexcess" << std::setw(w2) << std::left << "FLOAT" << "Max Phred-scaled p-value for exact test of excess heterozygosity, H [" << hetexcess << "]\n"
 	<< "\nOther site QC fail flags:\n"
@@ -91,10 +92,11 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	double strandbias = 60.0; // max Phred-scale p-value using Fisher's exact test of strand bias (FS)
 	double baseqbias = 21.0; // max absolute Wilcoxon rank sum test z-score of alt vs. ref base qualities (BaseQRankSum)
 	double varqual_depth = 2.0; // min variant Phred-scaled confidence/quality by depth (QD)
+	double qual = 30; // min Phred-scaled quality score of ALT assertion (QUAL field)
 	double hetexcess = 40.0; // max Phred-scaled p-value for exact test of excess heterozygosity (ExcessHet)
 
 	if ((rv=parseGATKargs(argc, argv, invcf, outvcf, passpos, failpos, biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov,
-			minind, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, varqual_depth, hetexcess))) {
+			minind, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess))) {
 		if (rv > 0)
 			return 0;
 		else if (rv < 0)
@@ -128,7 +130,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	/*
 	 * flags: N=No data for site, C=min coverage, D=max coverage, U=min number of individuals with data, A=biallelic,
 	 * R=RMS map quality, M=map quality bias, P=position bias, S=strand bias, B=base quality bias, V=variant quality,
-	 * H=excess heterozygosity, F=Unknown reference allele
+	 * Q=QUAL, H=excess heterozygosity, F=Unknown reference allele
 	*/
 
 	int infosize = 20; // can dynamically set this
@@ -139,7 +141,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	std::string contig = "";
 
 	std::string badflags;
-	badflags.reserve(14);
+	badflags.reserve(15);
 	region keep; // good sites
 	vcfrecord vcfinfo(badflags.capacity()); // vcf entry
 	std::pair <std::string,unsigned int> prev ("",0);
@@ -169,6 +171,11 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 			badflags.push_back('N');
 
 		} else {
+			// check QUAL
+			if (atoi(vcfvec[5].c_str()) < qual) {
+				badflags.push_back('Q');
+			}
+			// check the type of site
 			if (vcfvec[3].size() > 1 || vcfvec[4].size() > 1 || vcfvec[4] == "*") {
 				if (isMultiSNP(vcfvec)) {
 					// multi-allelic
@@ -446,13 +453,13 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double &varqual_depth, double &hetexcess) {
+	double& qual, double &varqual_depth, double &hetexcess) {
 
 	int rv = 0;
 
 	if (argc < 6) {
 		gatkinfo(biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov, minind, rms_mapq, mqRankSum,
-				posbias, strandbias, baseqbias, varqual_depth, hetexcess);
+				posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess);
 		return 1;
 	}
 
@@ -622,6 +629,15 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 			}
 		}
 
+		else if (strcmp(argv[argpos], "-qual") == 0) {
+			// min QUAL field value
+			qual = atof(argv[argpos+1]);
+			if (qual < 0) {
+				std::cerr << "-qual must be >= 0\n";
+				return -1;
+			}
+		}
+
 		else if (strcmp(argv[argpos], "-varq_depth") == 0) {
 			// min variant quality divided by depth of non-homo-ref individuals
 			varqual_depth = atof(argv[argpos+1]);
@@ -653,7 +669,7 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 	}
 
 	printUserArgs(invcf_name, outvcf_name, goodpos_name, badpos_name, biallelic, allsites, allsites_vcf, maxcov,
-			mincov, minind_cov, minind, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, varqual_depth, hetexcess);
+			mincov, minind_cov, minind, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess);
 
 	return rv;
 }
@@ -661,7 +677,7 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::string &goodpos_name, std::string &badpos_name,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double &varqual_depth, double &hetexcess) {
+	double &qual, double &varqual_depth, double &hetexcess) {
 
 	int w=20;
 	std::cerr << "\n"
@@ -681,6 +697,7 @@ void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::strin
 	<< std::setw(w) << std::left << "posbias: " << posbias << "\n"
 	<< std::setw(w) << std::left << "strandbias: "  << strandbias << "\n"
 	<< std::setw(w) << std::left << "baseqbias: " << baseqbias << "\n"
+	<< std::setw(w) << std::left << "qual: " << qual << "\n"
 	<< std::setw(w) << std::left << "varq_depth: " << varqual_depth << "\n"
 	<< std::setw(w) << std::left << "hetexcess: " << hetexcess << "\n"
 	<< "\n";
