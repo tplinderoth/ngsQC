@@ -38,17 +38,21 @@ struct vcfrecord {
 void maininfo ();
 
 void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
-	unsigned int &minind, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
+	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
 	double &varqual_depth, double &hetexcess);
 
 int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos);
 
 int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
-	unsigned int &minind, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double &qual, double &varqual_depth, double &hetexcess);
+	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
+	double& qual, double &varqual_depth, double &hetexcess);
 
-size_t nCoveredInd (std::vector<std::string> &vcfvec, unsigned int min_indcov, int* rv);
+int parseFormat (std::vector<std::string> &vcfvec, int* index);
+
+int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigned int min_indcov);
+
+//size_t nCoveredInd (std::vector<std::string> &vcfvec, unsigned int min_indcov, int* rv);
 
 int isMultiSNP (std::vector<std::string> &vcfvec);
 
@@ -62,7 +66,7 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 
 void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::string &goodpos_name, std::string &badpos_name,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
-	unsigned int &minind, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
+	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
 	double &qual, double &varqual_depth, double &hetexcess);
 
 #endif /* VCFCLEANER_H_ */

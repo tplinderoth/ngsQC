@@ -43,7 +43,7 @@ void maininfo () {
 }
 
 void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
-	unsigned int &minind, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
+	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
 	double &varqual_depth, double &hetexcess) {
 
 	int w1=20;
@@ -61,6 +61,7 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	<< std::setw(w1) << std::left << "-mincov" << std::setw(w2) << std::left << "INT" << "Min total site depth, C [" << mincov << "]\n"
 	<< std::setw(w1) << std::left << "-minind_cov" << std::setw(w2) << std::left << "INT" << "Min individual coverage [" << minind_cov << "]\n"
 	<< std::setw(w1) << std::left << "-minind" << std::setw(w2) << std::left << "INT" << "Min number of individuals covered by at least -minind_cov reads, U [" << minind << "]\n"
+	<< std::setw(w1) << std::left << "-mingeno" << std::setw(w2) << std::left << "INT" << "Min number of individuals with called genotype, G [" << mingeno << "]\n"
 	<< std::setw(w1) << std::left << "-rms_mapq" << std::setw(w2) << std::left << "FLOAT" << "Min RMS mapping quality, R [" << rms_mapq << "]\n"
 	<< std::setw(w1) << std::left << "-mapqRankSum" << std::setw(w2) << std::left << "FLOAT" << "Max absolute Wilcoxon rank sum test Z-score of alt vs. ref read map quality, M [" << mqRankSum << "]\n"
 	<< std::setw(w1) << std::left << "-posbias" << std::setw(w2) << std::left << "FLOAT" << "Max absolute Wilcoxon rank sum test Z-score of alt vs. ref read position bias, P [" << posbias << "]\n"
@@ -86,6 +87,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	unsigned int mincov = 2; // minimum total site coverage (DP)
 	unsigned int minind_cov = 1; // minimum individual coverage (DP)
 	unsigned int minind = 1; // minimum number of individuals with data
+	unsigned int mingeno = 1; // minimum number of individuals with called genotype
 	double rms_mapq = 40.0; // min RMS mapping quality (MQ)
 	double mqRankSum = 12.5; // max absolute Wilcoxon rank sum test z-score of alt vs ref read map quality (MQRankSum)
 	double posbias = 8.0; // max absolute Wilcoxon rank sum test z-score of alt vs ref read position bias  (ReadPosRankSum)
@@ -96,7 +98,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	double hetexcess = 40.0; // max Phred-scaled p-value for exact test of excess heterozygosity (ExcessHet)
 
 	if ((rv=parseGATKargs(argc, argv, invcf, outvcf, passpos, failpos, biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov,
-			minind, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess))) {
+			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess))) {
 		if (rv > 0)
 			return 0;
 		else if (rv < 0)
@@ -130,7 +132,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	/*
 	 * flags: N=No data for site, C=min coverage, D=max coverage, U=min number of individuals with data, A=biallelic,
 	 * R=RMS map quality, M=map quality bias, P=position bias, S=strand bias, B=base quality bias, V=variant quality,
-	 * Q=QUAL, H=excess heterozygosity, F=Unknown reference allele
+	 * Q=QUAL, H=excess heterozygosity, F=Unknown reference allele, G=min number of genotyped individuals
 	*/
 
 	int infosize = 20; // can dynamically set this
@@ -141,13 +143,14 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	std::string contig = "";
 
 	std::string badflags;
-	badflags.reserve(15);
+	badflags.reserve(16);
 	region keep; // good sites
 	vcfrecord vcfinfo(badflags.capacity()); // vcf entry
 	std::pair <std::string,unsigned int> prev ("",0);
 
 	int i=0;
-	size_t ncov = 0;
+	size_t indcounts [2]; // 0=number genotyped individuals, 1=number of individuals with min coverage
+
 	unsigned int pos = 0;
 
 	while (!invcf.eof()) {
@@ -190,13 +193,19 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 
 					if (allsites || vcfvec[4] != ".") {
 
-						// determine number of individuals with data
-						ncov = nCoveredInd(vcfvec, minind_cov, &rv);
-						if (rv) {
+						// extract individual information
+						if (extractIndInfo(vcfvec, indcounts, minind_cov)) {
+							rv = -1;
 							break;
-						} else {
-							if (ncov < minind) badflags.push_back('U');
 						}
+
+						// check number of genotyped individuals
+						//std::cerr << indcounts[0] << "\n"; //debug
+						if (indcounts[0] < mingeno) badflags.push_back('G');
+
+						// check number of individuals with data
+						//std::cerr << indcounts[1] << "\n"; //debug
+						if (indcounts[1] < minind) badflags.push_back('U');
 
 						// examine INFO field
 						infostream.str(std::string());
@@ -328,30 +337,16 @@ std::fstream* writeBads (std::string& flags, std::string &contig, const unsigned
 		if (flags[i] == 'I') return &outstream;
 	}
 
+	//std::cerr << contig << "\t" << *pos << "\t" << flags << "\n"; //debug
 	outstream << contig << "\t" << *pos << "\t" << flags << "\n";
 
 	return &outstream;
 }
 
-size_t nCoveredInd (std::vector<std::string> &vcfvec, unsigned int min_indcov, int* rv) {
-	// determine where the DP info is in the FORMAT field
+/*
+size_t nCoveredInd (std::vector<std::string> &vcfvec, unsigned int min_indcov, int dpidx) {
 	size_t n = 0;
-	int dpidx = 0;
-	int dpfound = 0;
 	unsigned int i = 0;
-	for (i=0; i<vcfvec[8].size(); ++i) {
-		if (vcfvec[8][i] == 'D' && vcfvec[8][i+1] == 'P') {
-			dpfound = 1;
-			break;
-		}
-		if (vcfvec[8][i] == ':') ++dpidx;
-	}
-
-	if (!dpfound) {
-		*rv = -1;
-		std::cerr << "No DP found in FORMAT field for " << vcfvec[0] << " " << vcfvec[1] << "\n";
-		return 0;
-	}
 
 	// count number of covered individuals
 	static std::vector<std::string>::iterator iter;
@@ -384,6 +379,126 @@ size_t nCoveredInd (std::vector<std::string> &vcfvec, unsigned int min_indcov, i
 	}
 
 	return n;
+}
+*/
+
+int parseFormat (std::vector<std::string> &vcfvec, int* index) {
+	// determine where the GT and DP info is in the FORMAT field
+	int rv = 0;
+	static const int nflags = 2; // 0=GT, 1=DP
+	for (int i=0; i<nflags; ++i) index[i] = 0;
+
+	int gtfound = 0, dpfound = 0;
+
+	for (unsigned int i=0; i<vcfvec[8].size(); ++i) {
+		if (vcfvec[8][i] == 'G' && vcfvec[8][i+1] == 'T') {
+			gtfound = 1;
+		} else if (vcfvec[8][i] == 'D' && vcfvec[8][i+1] == 'P') {
+			dpfound = 1;
+		}
+
+		if (vcfvec[8][i] == ':') {
+			if (!gtfound) ++index[0];
+			if (!dpfound) ++index[1];
+		}
+
+		if (gtfound + dpfound == nflags) break;
+	}
+
+	if (!gtfound) {
+		rv = -1;
+		std::cerr << "No GT found in FORMAT field for " << vcfvec[0] << " " << vcfvec[1] << "\n";
+	}
+
+	if (!dpfound) {
+		rv = -1;
+		std::cerr << "No DP found in FORMAT field for " << vcfvec[0] << " " << vcfvec[1] << "\n";
+	}
+
+	return rv;
+}
+
+int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigned int min_indcov) {
+	int rv = 0;
+	static const int nflags = 2;
+
+	// Find location of info in format field
+	int formatidx [nflags];
+	if (parseFormat(vcfvec, formatidx)) {
+		return -1;
+	}
+
+	unsigned int i = 0, j = 0;
+	static std::vector<std::string>::iterator iter;
+	static char dp [10];
+	static char gt [10];
+
+	for (i=0; i<nflags; ++i) indcounts[i] = 0;
+	dp[0] = '\0';
+	gt[0] = '\0';
+	int c=0;
+	int ind=1;
+
+	for (iter=vcfvec.begin()+9; iter < vcfvec.end(); ++iter) {
+		c = 0;
+		i = 0;
+		int nparsed=0;
+
+		for (i=0; i<iter->size(); ++i) {
+			if (c == formatidx[0]) {
+				// get genotype
+				j=0;
+				while (i < iter->size()) {
+					if ((*iter)[i] == ':') break;
+					gt[j] = (*iter)[i];
+					++i;
+					++j;
+				}
+				gt[j] = '\0';
+				++c;
+				++nparsed;
+			} else if (c == formatidx[1]) {
+				// get DP
+				j=0;
+				while (i < iter->size()) {
+					if ((*iter)[i] == ':') break;
+					dp[j] = (*iter)[i];
+					++i;
+					++j;
+				}
+				dp[j] = '\0';
+				++c;
+				++nparsed;
+			} else if ((*iter)[i] == ':') {
+				++c;
+			}
+
+			if (nparsed >= nflags) break;
+		}
+
+		// check for missing genotype
+		if (gt[0]) {
+			if (strcmp(gt, "./.") != 0) ++indcounts[0];
+		} else {
+			std::cerr << "Couldn't find genotype information for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
+		}
+
+		// check if coverage requirement is met
+		if (dp[0]) {
+			if (static_cast<unsigned int>(atoi(dp)) >= min_indcov) ++indcounts[1];
+		} else {
+			std::cerr << "Couldn't find DP value for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
+		}
+
+		/*
+		std::cerr << gt << "\t" << dp << "\n"; // debug
+		std::cerr << indcounts[0] << "\t" << indcounts[1] << "\n"; // debug
+		 */
+
+		++ind;
+	}
+
+	return rv;
 }
 
 void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, const unsigned int &mincov, const unsigned int &maxcov,
@@ -452,13 +567,13 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 
 int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
-	unsigned int &minind, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
+	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
 	double& qual, double &varqual_depth, double &hetexcess) {
 
 	int rv = 0;
 
 	if (argc < 6) {
-		gatkinfo(biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov, minind, rms_mapq, mqRankSum,
+		gatkinfo(biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov, minind, mingeno, rms_mapq, mqRankSum,
 				posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess);
 		return 1;
 	}
@@ -584,6 +699,15 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 			}
 		}
 
+		else if (strcmp(argv[argpos],"-mingeno") == 0) {
+			// min number of individuals with called genotype
+			mingeno = atoi(argv[argpos+1]);
+			if (mingeno < 0) {
+				std::cerr << "-mingeno must be >= 0\n";
+				return -1;
+			}
+		}
+
 		else if (strcmp(argv[argpos], "-rms_mapq") == 0) {
 			// min RMS mapping quality
 			rms_mapq = atof(argv[argpos+1]);
@@ -669,14 +793,14 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 	}
 
 	printUserArgs(invcf_name, outvcf_name, goodpos_name, badpos_name, biallelic, allsites, allsites_vcf, maxcov,
-			mincov, minind_cov, minind, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess);
+			mincov, minind_cov, minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess);
 
 	return rv;
 }
 
 void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::string &goodpos_name, std::string &badpos_name,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
-	unsigned int &minind, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
+	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
 	double &qual, double &varqual_depth, double &hetexcess) {
 
 	int w=20;
@@ -692,6 +816,7 @@ void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::strin
 	<< std::setw(w) << std::left << "mincov: " << mincov << "\n"
 	<< std::setw(w) << std::left << "minind_cov: " << minind_cov << "\n"
 	<< std::setw(w) << std::left << "minind: " << minind << "\n"
+	<< std::setw(w) << std::left << "mingeno: " << mingeno << "\n"
 	<< std::setw(w) << std::left << "rms_mapq: " << rms_mapq << "\n"
 	<< std::setw(w) << std::left << "mapqRankSum: " << mqRankSum << "\n"
 	<< std::setw(w) << std::left << "posbias: " << posbias << "\n"
