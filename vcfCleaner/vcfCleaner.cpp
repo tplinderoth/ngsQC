@@ -405,6 +405,7 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 		c = 0;
 		i = 0;
 		int nparsed=0;
+		int validgeno=0;
 
 		for (i=0; i<iter->size(); ++i) {
 			if (c == formatidx[0]) {
@@ -413,6 +414,7 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 				while (i < iter->size()) {
 					if ((*iter)[i] == ':') break;
 					gt[j] = (*iter)[i];
+					if (j > 0 && (gt[j] == '/' || gt[j] == '|')) ++validgeno;
 					++i;
 					++j;
 				}
@@ -441,27 +443,23 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 		// Check for missing genotype
 		// Alleles can be separated by '/' (unphased) or '|' (phased)
 		// The first subfield must always be genotype according to VCF documentation
-		if (gt[0]) {
+		if (validgeno) {
+
+			// check if genotype is called
 			if (strcmp(gt, "./.") != 0 && strcmp(gt, ".|.") != 0) {
 				++indcounts[0];
-
-				// check if coverage requirement is met when genotype is called
-				if (dp[0]) {
-					if (static_cast<unsigned int>(atoi(dp)) >= min_indcov) ++indcounts[1];
-				} else {
-					std::cerr << "Couldn't find DP value for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
-					rv = -1;
-				}
-
-			} else {
-				// check if coverage requirement is met when genotype has not been called
-				if (dp[0]) {
-					if (static_cast<unsigned int>(atoi(dp)) >= min_indcov) ++indcounts[1];
-				}
 			}
+
+			// check if coverage requirement is met
+			if (dp[0]) {
+				if (static_cast<unsigned int>(atoi(dp)) >= min_indcov) ++indcounts[1];
+			} else {
+				std::cerr << "WARNING: Couldn't find DP value for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
+			}
+
 		} else {
-			std::cerr << "Couldn't find genotype information for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
-			rv = -1;
+			std::cerr << "ERROR: Couldn't find genotype information for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
+			return -1;
 		}
 
 		/*
