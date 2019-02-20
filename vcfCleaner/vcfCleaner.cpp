@@ -25,11 +25,18 @@ int main (int argc, char** argv) {
 	if (argc < 2) {
 		maininfo();
 	} else if (strcmp(argv[1], "gatk") == 0) {
-		gatkvcf (argc, argv, invcf, outvcf, pass, fail);
+		rv = gatkvcf (argc, argv, invcf, outvcf, pass, fail);
 	} else {
 		std::cerr << "\n" << argv[1] << " is an invalid VCF type\n";
+		rv = 1;
 		maininfo();
 	}
+
+	// close file streams
+	if (invcf.is_open()) invcf.close();
+	if (outvcf.is_open()) outvcf.close();
+	if (pass.is_open()) pass.close();
+	if (fail.is_open()) fail.close();
 
 	return rv;
 }
@@ -195,8 +202,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 
 						// extract individual information
 						if (extractIndInfo(vcfvec, indcounts, minind_cov)) {
-							rv = -1;
-							break;
+							return -1;
 						}
 
 						// check number of genotyped individuals
@@ -238,8 +244,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 			if (vcfinfo.flags.empty()) {
 				// update good sites
 				if(!updateRegion(vcfinfo, keep, passpos)) {
-					rv = -1;
-					break;
+					return -1;
 				}
 
 				// output to VCF
@@ -250,8 +255,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 			} else {
 				// process sites that failed QC
 				if (!writeBads(vcfinfo.flags, vcfinfo.contig, &vcfinfo.pos, failpos)) {
-					rv = -1;
-					break;
+					return -1;
 				}
 			}
 		}
@@ -264,7 +268,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	// write last staged sites
 	if (vcfinfo.flags.empty()) {
 		if (!updateRegion(vcfinfo, keep, passpos)) {
-			rv = -1;
+			return -1;
 		}
 
 		if (allsites_vcf || vcfinfo.alt != '.') {
@@ -273,19 +277,16 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 
 	} else {
 		if (!writeBads(vcfinfo.flags, vcfinfo.contig, &vcfinfo.pos, failpos)) {
-			rv = -1;
+			return -1;
 		}
 	}
 
-	if (!keep.write(passpos)) {
-		rv = -1;
-	}
 
-	// close file streams
-	if (invcf.is_open()) invcf.close();
-	if (outvcf.is_open()) outvcf.close();
-	if (passpos.is_open()) passpos.close();
-	if (failpos.is_open()) failpos.close();
+	if (keep.entries > 0) {
+		if (!keep.write(passpos)) {
+			return -1;
+		}
+	}
 
 	std::cerr << "Finished processing VCF\n";
 
@@ -343,45 +344,6 @@ std::fstream* writeBads (std::string& flags, std::string &contig, const unsigned
 	return &outstream;
 }
 
-/*
-size_t nCoveredInd (std::vector<std::string> &vcfvec, unsigned int min_indcov, int dpidx) {
-	size_t n = 0;
-	unsigned int i = 0;
-
-	// count number of covered individuals
-	static std::vector<std::string>::iterator iter;
-	static char dp [10];
-	int c=0, j=0;
-
-	for (iter=vcfvec.begin()+9; iter < vcfvec.end(); ++iter) {
-		// find DP start
-		c = 0;
-		i = 0;
-		while (c < dpidx) {
-			++i;
-			if ((*iter)[i] == ':') {
-				++c;
-				++i;
-			}
-		}
-
-		// get dp value
-		j=0;
-		while (i < iter->size() && (*iter)[i] != ':') {
-			dp[j] = (*iter)[i];
-			++i;
-			++j;
-		}
-		dp[j] = '\0';
-
-		// check if coverage requirement is met
-		if (static_cast<unsigned int>(atoi(dp)) >= min_indcov) ++n;
-	}
-
-	return n;
-}
-*/
-
 int parseFormat (std::vector<std::string> &vcfvec, int* index) {
 	// determine where the GT and DP info is in the FORMAT field
 	int rv = 0;
@@ -434,12 +396,12 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 	static char gt [10];
 
 	for (i=0; i<nflags; ++i) indcounts[i] = 0;
-	dp[0] = '\0';
-	gt[0] = '\0';
 	int c=0;
 	int ind=1;
 
 	for (iter=vcfvec.begin()+9; iter < vcfvec.end(); ++iter) {
+		dp[0] = '\0';
+		gt[0] = '\0';
 		c = 0;
 		i = 0;
 		int nparsed=0;
@@ -476,18 +438,30 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 			if (nparsed >= nflags) break;
 		}
 
-		// check for missing genotype
+		// Check for missing genotype
+		// Alleles can be separated by '/' (unphased) or '|' (phased)
+		// The first subfield must always be genotype according to VCF documentation
 		if (gt[0]) {
-			if (strcmp(gt, "./.") != 0) ++indcounts[0];
+			if (strcmp(gt, "./.") != 0 && strcmp(gt, ".|.") != 0) {
+				++indcounts[0];
+
+				// check if coverage requirement is met when genotype is called
+				if (dp[0]) {
+					if (static_cast<unsigned int>(atoi(dp)) >= min_indcov) ++indcounts[1];
+				} else {
+					std::cerr << "Couldn't find DP value for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
+					rv = -1;
+				}
+
+			} else {
+				// check if coverage requirement is met when genotype has not been called
+				if (dp[0]) {
+					if (static_cast<unsigned int>(atoi(dp)) >= min_indcov) ++indcounts[1];
+				}
+			}
 		} else {
 			std::cerr << "Couldn't find genotype information for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
-		}
-
-		// check if coverage requirement is met
-		if (dp[0]) {
-			if (static_cast<unsigned int>(atoi(dp)) >= min_indcov) ++indcounts[1];
-		} else {
-			std::cerr << "Couldn't find DP value for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
+			rv = -1;
 		}
 
 		/*
