@@ -51,7 +51,7 @@ void maininfo () {
 
 void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
-	double &varqual_depth, double &hetexcess) {
+	double &varqual_depth, double &hetexcess, int &verbose) {
 
 	int w1=20;
 	int w2=8;
@@ -77,6 +77,7 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	<< std::setw(w1) << std::left << "-qual" << std::setw(w2) << std::left << "FLOAT" << "Min Phred-scaled quality score of ALT assertion, Q [" << qual << "]\n"
 	<< std::setw(w1) << std::left << "-varq_depth" << std::setw(w2) << std::left << "FLOAT" << "Min variant Phred-scaled confidence/quality by depth, V [" << varqual_depth << "]\n"
 	<< std::setw(w1) << std::left << "-hetexcess" << std::setw(w2) << std::left << "FLOAT" << "Max Phred-scaled p-value for exact test of excess heterozygosity, H [" << hetexcess << "]\n"
+	<< std::setw(w1) << std::left << "-verbose" << std::setw(w2) << std::left << "0|1|2" << "Level of warnings to issue: 0 = suppress all, 1 = site-level, 2 = individual-level [" << verbose << "]\n"
 	<< "\nOther site QC fail flags:\n"
 	<< "F, Unkown reference allele\n"
 	<< "N, No data for any individuals\n"
@@ -103,9 +104,10 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	double varqual_depth = 2.0; // min variant Phred-scaled confidence/quality by depth (QD)
 	double qual = 30; // min Phred-scaled quality score of ALT assertion (QUAL field)
 	double hetexcess = 40.0; // max Phred-scaled p-value for exact test of excess heterozygosity (ExcessHet)
+	int verbose = 2; // amount of warnings outputted, 0=none, 1=site level, 2=individual level
 
 	if ((rv=parseGATKargs(argc, argv, invcf, outvcf, passpos, failpos, biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov,
-			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess))) {
+			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, verbose))) {
 		if (rv > 0)
 			return 0;
 		else if (rv < 0)
@@ -201,7 +203,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 					if (allsites || vcfvec[4] != ".") {
 
 						// extract individual information
-						if (extractIndInfo(vcfvec, indcounts, minind_cov)) {
+						if (extractIndInfo(vcfvec, indcounts, minind_cov, verbose)) {
 							return -1;
 						}
 
@@ -369,18 +371,18 @@ int parseFormat (std::vector<std::string> &vcfvec, int* index) {
 
 	if (!gtfound) {
 		rv = -1;
-		std::cerr << "No GT found in FORMAT field for " << vcfvec[0] << " " << vcfvec[1] << "\n";
+		std::cerr << "ERROR: No GT found in FORMAT field for " << vcfvec[0] << " " << vcfvec[1] << "\n";
 	}
 
 	if (!dpfound) {
 		rv = -1;
-		std::cerr << "No DP found in FORMAT field for " << vcfvec[0] << " " << vcfvec[1] << "\n";
+		std::cerr << "ERROR: No DP found in FORMAT field for " << vcfvec[0] << " " << vcfvec[1] << "\n";
 	}
 
 	return rv;
 }
 
-int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigned int min_indcov) {
+int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigned int min_indcov, int verbose) {
 	int rv = 0;
 	static const int nflags = 2;
 
@@ -398,6 +400,10 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 	for (i=0; i<nflags; ++i) indcounts[i] = 0;
 	int c=0;
 	int ind=1;
+
+	static std::string missing = ""; // flags which subfields are missing
+	static int miss [nflags]; // 0=GT, 1=DP
+	for (i=0; i<nflags; ++i) miss[i] = 0;
 
 	for (iter=vcfvec.begin()+9; iter < vcfvec.end(); ++iter) {
 		dp[0] = '\0';
@@ -454,7 +460,12 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 			if (dp[0]) {
 				if (static_cast<unsigned int>(atoi(dp)) >= min_indcov) ++indcounts[1];
 			} else {
-				std::cerr << "WARNING: Couldn't find DP value for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
+				if (verbose == 2) {
+					std::cerr << "WARNING: Couldn't find DP value for " << vcfvec[0] << " " << vcfvec[1] << " individual " << ind << "\n";
+				} else if (verbose == 1 && !miss[1]) {
+					missing += " DP";
+					miss[1] = 1;
+				}
 			}
 
 		} else {
@@ -468,6 +479,11 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 		 */
 
 		++ind;
+	}
+
+	// notify of missing subfields for a site
+	if (verbose == 1 && !missing.empty()) {
+		std::cerr << "WARNING: Missing" << missing << " values for " << vcfvec[0] << " " << vcfvec[1] << "\n";
 	}
 
 	return rv;
@@ -540,13 +556,13 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double& qual, double &varqual_depth, double &hetexcess) {
+	double& qual, double &varqual_depth, double &hetexcess, int &verbose) {
 
 	int rv = 0;
 
 	if (argc < 6) {
 		gatkinfo(biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov, minind, mingeno, rms_mapq, mqRankSum,
-				posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess);
+				posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, verbose);
 		return 1;
 	}
 
@@ -749,6 +765,22 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 			if (hetexcess < 0) {
 				std::cerr << "-hetexcess must be >= 0\n";
 				return -1;
+			}
+		}
+
+		else if (strcmp(argv[argpos], "-verbose") == 0) {
+			// level of warnings to issue
+			verbose = atoi(argv[argpos+1]);
+			switch (verbose) {
+				case 0 :
+					break;
+				case 1 :
+					break;
+				case 2 :
+					break;
+				default:
+					std::cerr << "Invalid -verbose level (should be 0, 1, or 2)\n";
+					return -1;
 			}
 		}
 

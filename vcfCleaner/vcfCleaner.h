@@ -39,18 +39,18 @@ void maininfo ();
 
 void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
-	double &varqual_depth, double &hetexcess);
+	double &varqual_depth, double &hetexcess, int &verbose);
 
 int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos);
 
 int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double& qual, double &varqual_depth, double &hetexcess);
+	double& qual, double &varqual_depth, double &hetexcess, int &verbose);
 
 int parseFormat (std::vector<std::string> &vcfvec, int* index);
 
-int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigned int min_indcov);
+int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigned int min_indcov, int verbose);
 
 //size_t nCoveredInd (std::vector<std::string> &vcfvec, unsigned int min_indcov, int* rv);
 
