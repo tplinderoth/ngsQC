@@ -56,7 +56,7 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	int w1=20;
 	int w2=8;
 
-	std::cerr << "\nThis is the subroutine used to filter VCFs produced by the GATK's HaplotypeCaller/GenotypeGVCFs workflow\n"
+	std::cerr << "\nThis program is for filtering VCFs produced by GATK's HaplotypeCaller/GenotypeGVCFs workflow\n"
 	<< "Indels are ignored and not included in files containing filtered sites\n"
 	<< "\nvcfCleaner gatk [arguments]\n\n"
 	<< std::setw(w1) << std::left << "-vcf" << std::setw(w2) << std::left << "FILE" << "Input VCF file to filter\n"
