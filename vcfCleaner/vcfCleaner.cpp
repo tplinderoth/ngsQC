@@ -3,6 +3,7 @@
  *
  * TODO:
  * - dynamically set infosize (number of INFO IDs) based on VCF header
+ * - implement accurate multiallelic filtering, e.g. maf filtering
  */
 
 #include "vcfCleaner.h"
@@ -51,7 +52,7 @@ void maininfo () {
 
 void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
-	double &varqual_depth, double &hetexcess, int &verbose) {
+	double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &verbose) {
 
 	int w1=20;
 	int w2=8;
@@ -77,6 +78,8 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	<< std::setw(w1) << std::left << "-qual" << std::setw(w2) << std::left << "FLOAT" << "Min Phred-scaled quality score of ALT assertion, Q [" << qual << "]\n"
 	<< std::setw(w1) << std::left << "-varq_depth" << std::setw(w2) << std::left << "FLOAT" << "Min variant Phred-scaled confidence/quality by depth, V [" << varqual_depth << "]\n"
 	<< std::setw(w1) << std::left << "-hetexcess" << std::setw(w2) << std::left << "FLOAT" << "Max Phred-scaled p-value for exact test of excess heterozygosity, H [" << hetexcess << "]\n"
+	<< std::setw(w1) << std::left << "-varonly" << std::setw(w2) << std::left << "0|1" << "The INFO AF for SNP-only output VCF must be in range 0=[0,1], or 1=(0,1) [" << varonly << "]\n"
+	<< std::setw(w1) << std::left << "-maf" << std::setw(w2) << std::left << "FLOAT" << "Minor allele frequency lower bound for SNP-only VCF [" << maf << "]\n"
 	<< std::setw(w1) << std::left << "-verbose" << std::setw(w2) << std::left << "0|1|2" << "Level of warnings to issue: 0 = suppress all, 1 = site-level, 2 = individual-level [" << verbose << "]\n"
 	<< "\nOther site QC fail flags:\n"
 	<< "F, Unkown reference allele\n"
@@ -104,10 +107,12 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	double varqual_depth = 2.0; // min variant Phred-scaled confidence/quality by depth (QD)
 	double qual = 30; // min Phred-scaled quality score of ALT assertion (QUAL field)
 	double hetexcess = 40.0; // max Phred-scaled p-value for exact test of excess heterozygosity (ExcessHet)
+	int varonly = 1; // The INFO for SNP-only VCF must have AF in 1=range (0,1), or 0=range [0,1]
+	double mafcutoff = 0.0; // minor allele frequency lower bound for SNP-only VCF
 	int verbose = 2; // amount of warnings outputted, 0=none, 1=site level, 2=individual level
 
 	if ((rv=parseGATKargs(argc, argv, invcf, outvcf, passpos, failpos, biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov,
-			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, verbose))) {
+			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, mafcutoff, verbose))) {
 		if (rv > 0)
 			return 0;
 		else if (rv < 0)
@@ -161,6 +166,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	size_t indcounts [2]; // 0=number genotyped individuals, 1=number of individuals with min coverage
 
 	unsigned int pos = 0;
+	double maf = 0.0;
 
 	while (!invcf.eof()) {
 	// assume vcf fields are [0]=CHROM, [1]=POS, [2]=ID, [3]=REF, [4]=ALT, [5]=QUAL, [6]=FILTER, [7]=INFO, [8]=FORMAT
@@ -189,7 +195,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 			}
 			// check the type of site
 			if (vcfvec[3].size() > 1 || vcfvec[4].size() > 1 || vcfvec[4] == "*") {
-				if (isMultiSNP(vcfvec)) {
+				if (biallelic && isMultiSNP(vcfvec)) {
 					// multi-allelic
 					badflags.push_back('A');
 				} else {
@@ -197,7 +203,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 					badflags.push_back('I');
 				}
 			} else {
-				// site is a SNP
+				// site is a potential SNP
 				if (vcfvec[3] == "A" || vcfvec[3] == "C" || vcfvec[3] == "G" || vcfvec[3] == "T") {
 
 					if (allsites || vcfvec[4] != ".") {
@@ -227,6 +233,9 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 
 						checkGatkInfo(infovec, i, &badflags, mincov, maxcov, rms_mapq, mqRankSum, posbias, strandbias,
 								baseqbias, varqual_depth, hetexcess);
+
+						// get allele frequency info
+						maf = getMaf(vcfvec, verbose);
 					}
 
 				} else {
@@ -250,8 +259,14 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 				}
 
 				// output to VCF
-				if (allsites_vcf || vcfinfo.alt != '.') {
+				if (allsites_vcf) {
+					// print site whether it's variable or not
 					outvcf << vcfinfo.entry << "\n";
+				} else if ( vcfinfo.alt != '.') {
+					// potential snp
+					if (!varonly || (varonly && vcfinfo.af > mafcutoff)) {
+						outvcf << vcfinfo.entry << "\n";
+					}
 				}
 
 			} else {
@@ -264,7 +279,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 
 		prev.first = vcfinfo.contig;
 		prev.second = vcfinfo.pos;
-		vcfinfo.newEntry(&vcfline, &vcfvec[0], &pos, (vcfvec[4].c_str())[0], &badflags);
+		vcfinfo.newEntry(&vcfline, &vcfvec[0], &pos, (vcfvec[4].c_str())[0], maf, &badflags);
 	}
 
 	// write last staged sites
@@ -273,8 +288,14 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 			return -1;
 		}
 
-		if (allsites_vcf || vcfinfo.alt != '.') {
+		if (allsites_vcf) {
+			// print site whether it's variable or not
 			outvcf << vcfinfo.entry << "\n";
+		} else if ( vcfinfo.alt != '.') {
+			// potential snp
+			if (!varonly || (varonly && vcfinfo.af > mafcutoff)) {
+				outvcf << vcfinfo.entry << "\n";
+			}
 		}
 
 	} else {
@@ -293,6 +314,36 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	std::cerr << "Finished processing VCF\n";
 
 	return rv;
+}
+
+double getMaf (const std::vector<std::string> &vcfvec, int verbose) {
+	// only returns frequency of first-listed ALT allele
+	static char f [10];
+	f[0] = '\0';
+	int j=0;
+	static std::string info;
+	info.clear();
+	info = (vcfvec[7]);
+	for (unsigned int i=0; i<info.size(); ++i) {
+		if (i+2 < info.size() && info[i]=='A' && info[i+1]=='F' && info[i+2]=='=') {
+			i += 3;
+			while (i < info.size() && info[i] != ';' && info[i] != ',') {
+				f[j] = info[i];
+				++j;
+				++i;
+			}
+			f[j] = '\0';
+			break;
+		}
+	}
+
+	if (!f[0]) {
+		if (verbose) std::cerr << "WARNING: No AF found in INFO field for " << vcfvec[0] << " " << vcfvec[1] << "\n";
+		return -1.0;
+	}
+
+	double freq = atof(f);
+	return (freq < 0.5 ? freq : 1.0-freq);
 }
 
 int isMultiSNP (std::vector<std::string> &vcfvec) {
@@ -556,13 +607,13 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double& qual, double &varqual_depth, double &hetexcess, int &verbose) {
+	double& qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &verbose) {
 
 	int rv = 0;
 
 	if (argc < 6) {
 		gatkinfo(biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov, minind, mingeno, rms_mapq, mqRankSum,
-				posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, verbose);
+				posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, maf, verbose);
 		return 1;
 	}
 
@@ -615,7 +666,8 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 				case 0:
 					break;
 				case 1:
-					break;
+					std::cerr << "retaining multiallelic sites (-biallelic 0) is still in development...\n";
+					return 1;
 				default:
 					std::cerr << "-biallelic must be 0 to keep all SNPs or 1 to keep only biallelic SNPs\n";
 					return -1;
@@ -768,6 +820,29 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 			}
 		}
 
+		else if (strcmp(argv[argpos], "-varonly") == 0) {
+			// AF criteria for outputting variable sites
+			varonly = atoi(argv[argpos+1]);
+			switch (varonly) {
+				case 0 :
+					break;
+				case 1 :
+					break;
+				default:
+					std::cerr << "Invalid -varonly value, (should be 0 or 1)\n";
+					return -1;
+			}
+		}
+
+		else if (strcmp(argv[argpos], "-maf") == 0) {
+			// MAF lower bound for variable site VCFs
+			maf = atof(argv[argpos+1]);
+			if (maf < 0.0 || maf > 0.5) {
+				std::cerr << "-maf out of [0, 0.5] range\n";
+				return -1;
+			}
+		}
+
 		else if (strcmp(argv[argpos], "-verbose") == 0) {
 			// level of warnings to issue
 			verbose = atoi(argv[argpos+1]);
@@ -797,7 +872,8 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 	}
 
 	printUserArgs(invcf_name, outvcf_name, goodpos_name, badpos_name, biallelic, allsites, allsites_vcf, maxcov,
-			mincov, minind_cov, minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess);
+			mincov, minind_cov, minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess,
+			varonly, maf);
 
 	return rv;
 }
@@ -805,7 +881,7 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::string &goodpos_name, std::string &badpos_name,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double &qual, double &varqual_depth, double &hetexcess) {
+	double &qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf) {
 
 	int w=20;
 	std::cerr << "\n"
@@ -829,6 +905,8 @@ void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::strin
 	<< std::setw(w) << std::left << "qual: " << qual << "\n"
 	<< std::setw(w) << std::left << "varq_depth: " << varqual_depth << "\n"
 	<< std::setw(w) << std::left << "hetexcess: " << hetexcess << "\n"
+	<< std::setw(w) << std::left << "varonly: " << varonly << "\n"
+	<< std::setw(w) << std::left << "maf: " << maf << "\n"
 	<< "\n";
 }
 
@@ -868,16 +946,19 @@ vcfrecord::vcfrecord (size_t flagcapacity)
 	  flags(""),
 	  contig(""),
 	  pos(0),
-	  alt('\0')
+	  alt('\0'),
+	  af(0)
 {
 	flags.reserve(flagcapacity);
 }
 
-void vcfrecord::newEntry (std::string* vcfline, std::string* id, unsigned int* position, char altallele, std::string* f) {
+void vcfrecord::newEntry (std::string* vcfline, std::string* id, unsigned int* position,
+		char altallele, double allelef, std::string* f) {
 	entry = *vcfline;
 	contig = *id;
 	pos = *position;
 	alt = altallele;
+	af = allelef;
 	if (f) {
 		flags = *f;
 	} else {

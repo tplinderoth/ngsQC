@@ -24,13 +24,15 @@ struct region {
 
 struct vcfrecord {
 	vcfrecord(size_t flagcapacity = 0);
-	void newEntry (std::string* vcfline, std::string* id, unsigned int* position, char altallele, std::string* f = NULL);
+	void newEntry (std::string* vcfline, std::string* id, unsigned int* position,
+			char altallele, double allelef, std::string* f = NULL);
 
 	std::string entry;
 	std::string flags;
 	std::string contig;
 	unsigned int pos;
 	char alt;
+	double af;
 };
 
 // functions
@@ -39,14 +41,14 @@ void maininfo ();
 
 void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
-	double &varqual_depth, double &hetexcess, int &verbose);
+	double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &verbose);
 
 int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos);
 
 int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double& qual, double &varqual_depth, double &hetexcess, int &verbose);
+	double& qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &verbose);
 
 int parseFormat (std::vector<std::string> &vcfvec, int* index);
 
@@ -64,9 +66,11 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 	const double &rms_mapq, const double &mqRankSum, const double &posbias, const double &strandbias, const double &baseqbias,
 	const double & varqual_depth, const double &hetexcess);
 
+double getMaf (const std::vector<std::string> &vcfvec, int verbose);
+
 void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::string &goodpos_name, std::string &badpos_name,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double &qual, double &varqual_depth, double &hetexcess);
+	double &qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf);
 
 #endif /* VCFCLEANER_H_ */
