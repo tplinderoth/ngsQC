@@ -318,7 +318,7 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 
 double getMaf (const std::vector<std::string> &vcfvec, int verbose) {
 	// only returns frequency of first-listed ALT allele
-	static char f [10];
+	static char f [30];
 	f[0] = '\0';
 	int j=0;
 	static std::string info;
@@ -445,7 +445,7 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 
 	unsigned int i = 0, j = 0;
 	static std::vector<std::string>::iterator iter;
-	static char dp [10];
+	static char dp [30];
 	static char gt [10];
 
 	for (i=0; i<nflags; ++i) indcounts[i] = 0;
@@ -545,7 +545,7 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 		const double & varqual_depth, const double &hetexcess) {
 
 	static char id [20];
-	static char val [20];
+	static char val [40];
 	char* idptr = id;
 	double v = 0;
 	double absv = 0;

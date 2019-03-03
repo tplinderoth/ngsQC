@@ -109,7 +109,7 @@ int expectGeno (std::vector<std::string> &vcfvec, double* geno, unsigned int nin
 
 	// get genotype likelihoods
 	static double pl [3];
-	static char plstr [10];
+	static char plstr [20];
 	static std::vector<std::string>::iterator inditer;
 	unsigned int n=0;
 
@@ -177,7 +177,7 @@ int expectGeno (std::vector<std::string> &vcfvec, double* geno, unsigned int nin
 }
 
 double getaf (const std::vector<std::string> &vcfvec) {
-	static char f [10];
+	static char f [30];
 	f[0] = '\0';
 	int j=0;
 	static std::string info;
