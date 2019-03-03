@@ -664,10 +664,10 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 			biallelic = atoi(argv[argpos+1]);
 			switch (biallelic) {
 				case 0:
-					break;
-				case 1:
 					std::cerr << "retaining multiallelic sites (-biallelic 0) is still in development...\n";
 					return 1;
+				case 1:
+					break;
 				default:
 					std::cerr << "-biallelic must be 0 to keep all SNPs or 1 to keep only biallelic SNPs\n";
 					return -1;
