@@ -203,7 +203,6 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 					badflags.push_back('I');
 				}
 			} else {
-				// site is a potential SNP
 				if (vcfvec[3] == "A" || vcfvec[3] == "C" || vcfvec[3] == "G" || vcfvec[3] == "T") {
 
 					if (allsites || vcfvec[4] != ".") {
@@ -234,8 +233,12 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 						checkGatkInfo(infovec, i, &badflags, mincov, maxcov, rms_mapq, mqRankSum, posbias, strandbias,
 								baseqbias, varqual_depth, hetexcess);
 
-						// get allele frequency info
-						maf = getMaf(vcfvec, verbose);
+						// get allele frequency info for potential snp
+						if (vcfvec[4] != ".") {
+							maf = getMaf(vcfvec, verbose);
+						} else {
+							maf = 0.0;
+						}
 					}
 
 				} else {
