@@ -58,19 +58,20 @@ Options:
 -g	 filter exons with SNPs out of HWE (requires -X)
 -v	 process nonvariants
 
-Generating input VCF (some of the filters rely on annotations by SAMtools\/BCFtools):
-*samtools mpileup should be run with -t SP,DP
-*bcftools call should be run using -f GC -c
+Generating input VCF with BCFtools:
+-run 'bcftools mpileup' with '-a SP,DP' to provide depth and strand bias info
+-run 'bcftools call' using '-f GC -c'
 
 An example for how to generate the input VCF file:
-samtools mpileup -f <reference fasta> -b <bam list> -u -t SP,DP | bcftools call -f GQ -c - > unfiltered_sites.vcf 
+bcftools mpileup -f <reference fasta> -b <bam list> -a SP,DP | bcftools call -f GQ -c - > unfiltered_sites.vcf 
 
-It's recomended to use mpileup -I to ignore indels.
+Consider using 'bcftools call --skip-variants indels' since these sites will
+be ignored by snpCleaner anyways.
 
 Output Notes:
 -bed format file is zero-based.
--Characters in front of filtered sites (dumped with option -p) indicate filters that the site
-failed to pass.
+-Characters preceeding filtered sites (dumped with option -p) indicate filters that the sites
+ failed to pass and correspond to the option flags (e.g. 'S' indicates strand bias).
 \n/) if ($opts{'?'} || (!$ARGV[0] && -t STDIN));
 
 # Argument check
