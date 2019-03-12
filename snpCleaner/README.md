@@ -58,11 +58,13 @@ Some of the filters rely on BCFtools annotations and so when generating input VC
 * run `bcftools mpileup` with `-a SP,DP` to provide depth and strand bias info
 * run `bcftools call` using `-f GC -c`
 
-Example for how to generate the input VCF file:<br/>
-`bcftools mpileup -f <reference fasta> -b <bam list> -a SP,DP | bcftools call -f GQ -c - > unfiltered_sites.vcf`
+Example for how to generate the input VCF file:
 
-Example for how to pipe directly into snpCleaner without dumping an unfiltered VCF file:<br/>
-`bcftools mpileup -b <bam list file> -f <reference file> -a SP,DP | bcftools call -f GQ -c | snpCleaner.pl -v -B <qc-passed sites bed file name> -p <bzipped failed sites file name> > <qc-passed sites VCF file name>`
+	bcftools mpileup -f <reference fasta> -b <bam list> -a SP,DP | bcftools call -f GQ -c - > unfiltered_sites.vcf
+
+Example for how to pipe directly into snpCleaner without dumping an unfiltered VCF file:
+
+	bcftools mpileup -b <bam list file> -f <reference file> -a SP,DP | bcftools call -f GQ -c | snpCleaner.pl -v -B <qc-passed sites bed file name> -p <bzipped failed sites file name> > <qc-passed sites VCF file name>
 
 When generating input using BCFtools you may want to increase the max per-file depth with `bcftools mpileup -d` to ensure all reads are used. Also consider using 'bcftools call --skip-variants indels' since these sites will be ignored by snpCleaner anyways.
 
