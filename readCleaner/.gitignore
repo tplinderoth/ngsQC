@@ -5,3 +5,4 @@ readCleaner
 /Release/
 .project
 .cproject
+.settings/
