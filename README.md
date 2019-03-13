@@ -16,3 +16,6 @@ Download ngsQC by either cloning it from github
 	git clone https://github.com/tplinderoth/ngsQC.git
 
 or download the ZIP file.
+
+## Contact
+Tyler Linderoth\: tylerp.linderoth@gmail.com
