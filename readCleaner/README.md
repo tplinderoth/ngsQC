@@ -16,14 +16,14 @@ Then once you have Boost installed, compile readCleaner:
 
 ## External program dependencies
 
-readCleaner relies on some external program to be installed and in the user's PATH. The following programs as well as the versions that readCleaner has been tested with follow. The name enclosed in [ ] is what the name of the binary that readCleaner looks for.
+readCleaner relies on some external programs to be installed and in the user's PATH. The following programs as well as the versions that readCleaner has been tested with follow. The name enclosed in [ ] is the name of the binary that readCleaner looks for. Since supplying the full path to the trimmomatic jar it is the only program that does not have to be in the user's PATH.
 
 * super_deduper v 2.0 [super_deduper]
 * cutadapt v 1.18 [cutadapt]
 * PEAR v 0.9.10 [pear]
 * bowtie 2 v 2.3.4.1 [bowtie2]
 * trimmomatic v 0.36 [full path to trimmomatic jar file, e.g. /usr/local/src/trimmomatic-0.36/dist/jar/trimmomatic-0.36.jar]
-* FastQC v 0.11.4 [fastqc] (this is optional, as it required only for post-filtering quality evaluation)
+* FastQC v 0.11.4 [fastqc] (this is optional as it is required only for post-filtering quality evaluation)
 
 ## Usage
 
@@ -57,6 +57,6 @@ Run readCleaner without arguments to get usage information.
 	-pe           <int>         Data is paired end (int = 1) or unpaired (int = 0) [1]
 	-eval         <int>         Perform fastQC evaluation of cleaned reads (int = 1), or do not (int = 0) [1]
 
-The input are fastq format files. Use `--fastqdir` to direct readCleaner to the directory where all fastq files that you want filtered exist.
+The input are fastq format files. Use `-fastqdir` to direct readCleaner to the directory where all fastq files that you want filtered exist.
 
-The output will be quality-controlled fastq files in a directory called 'reads' named by their original prefix with '_u_final.txt' appended to unpaired read files, '_1_final.txt' appended to forward read files, and '_2_final.txt' appended to reverse reads files. Separate forward and reverse reads files will only be generated with `pe 1`. A directory labeled 'evaluation' will contain the FastQC quality evaluation files for the filtered fastq files. Lastly, a directory called 'filtered' will contain fastq files that failed quality control to due being identified as sourced from contaminants, having low-complexity, or representing duplicates. 
+The output will be quality-controlled fastq files in a directory called 'reads' named by their original prefix with '_u_final.txt' appended to unpaired read files, '_1_final.txt' appended to forward read files, and '_2_final.txt' appended to reverse reads files. Separate forward and reverse read files will only be generated with `-pe 1`. A directory labeled 'evaluation' will contain the FastQC quality evaluation files for the filtered fastq files if `-eval 1`. Lastly, a directory called 'filtered' will contain fastq files with reads failed quality control due to being identified as sourced from contaminants, having low-complexity, or representing duplicates. 
