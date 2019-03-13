@@ -8,3 +8,11 @@ ngsQC is a collection of programs for quality control of next-generation sequenc
 * vcfCleaner is a collection of C++ programs for quality-filtering and subsetting VCF files, as well as file format conversion.
 
 * readCleaner is a C++ program for fastq quality-control.
+
+## Installation
+
+Download ABCutils by either cloning it from github
+
+	git clone https://github.com/tplinderoth/ngsQC.git
+
+or download the ZIP file.
