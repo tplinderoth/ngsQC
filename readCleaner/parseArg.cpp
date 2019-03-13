@@ -8,6 +8,7 @@
 #include "parseArg.h"
 #include <iomanip>
 #include <sstream>
+#include <iostream>
 
 parseArg::parseArg()
 	: _adapter("truseq"),
