@@ -11,7 +11,7 @@ ngsQC is a collection of programs for quality control of next-generation sequenc
 
 ## Installation
 
-Download ABCutils by either cloning it from github
+Download ngsQC by either cloning it from github
 
 	git clone https://github.com/tplinderoth/ngsQC.git
 
