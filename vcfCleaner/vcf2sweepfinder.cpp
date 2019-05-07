@@ -27,7 +27,7 @@ void vcf2sweepfinderInfo (int poltype, int minderived, int minminor) {
 	<< std::setw(w) << std::left << "-minderived" << std::setw(w) << std::left << "INT" << "minimum number of derived alleles [" << minderived << "]\n"
 	<< std::setw(w) << std::left << "-minminor" << std::setw(w) << std::left << "INT" << "minimum number of minor alleles at folded sites [" << minminor << "]\n"
 	<< "\npolarization method\n"
-	<< "0: " << "Do not polarize (all sites are folded with output x column referring to ALT allele counts\n"
+	<< "0: " << "Do not polarize (all sites are folded with output x column referring to ALT allele counts)\n"
 	<< "1: " << "Use allele from the VCF 'AA' INFO field as ancestral\n"
 	<< "2: " << "Use alleles supplied in a FASTA format ancestral state file as ancestral\n"
 	<< "\nOutput columns\n"
@@ -440,7 +440,6 @@ int processVcf (std::ifstream &vcf, const int anctype, std::ifstream &ancfile, f
 	unsigned int altfreq = 0;
 	unsigned int minorfreq = 0;
 
-	int posn = 0;
 	while (!vcf.eof()) {
 
 		// get a new site and vectorize it
@@ -494,9 +493,6 @@ int processVcf (std::ifstream &vcf, const int anctype, std::ifstream &ancfile, f
 			}
 			std::cout << pos << "\t" << altfreq << "\t" << n << "\t" << fold << "\n";
 		}
-
-		if (posn >= 4) break;
-		++posn;
 	}
 
 	return 0;
