@@ -2,20 +2,21 @@
 
 # SNPcleaner.pl
 # Author: Tyler Linderoth, tylerp.linderoth@gmail.com
-my $version = "2.4.3";
+my $version = "2.4.1";
 
 # TODO:
 #    Add argument check
+#    Output smaller BED file (join contiguous regions)
 
 use strict;
 use warnings;
 use Getopt::Std;
 use IO::Compress::Bzip2;
 
-my %opts = ('?'=> 0, 'd'=>1, 'D'=>1000000, 'k'=>1, 'u'=>0, 'a'=>0, 'Q'=>10, 'S'=>1e-4, 'b'=>1e-100, 'f'=>0, 'e'=>1e-4, 'h'=>1e-4, 'F'=>0, 'H'=>0, 'L'=>0, 'A'=>undef,
-	    'M'=>undef, 'B'=>undef, 'p'=>undef, 'r'=>undef, 'X'=>undef, 't'=>undef, 'g'=>undef, 'v'=>undef, '2'=>undef, 'q'=>2, 'o'=>undef, 'c'=>0, 'w'=>undef);
+my %opts = ('?'=> 0, 'd'=>2, 'D'=>1000000, 'k'=>1, 'u'=>0, 'a'=>2, 'Q'=>10, 'S'=>1e-4, 'b'=>1e-100, 'f'=>0, 'e'=>1e-4, 'h'=>1e-4, 'F'=>0, 'H'=>0, 'L'=>0, 'A'=>undef,
+	    'M'=>undef, 'B'=>undef, 'p'=>undef, 'r'=>undef, 'X'=>undef, 't'=>undef, 'g'=>undef, 'v'=>undef, '2'=>undef, 'q'=>2);
 
-getopts('?2d:D:k:u:a:Q:S:b:f:e:h:F:H:L:A:M:B:p:r:X:q:o:c:tgvw', \%opts);
+getopts('?2d:D:k:u:a:Q:S:b:f:e:h:F:H:L:A:M:B:p:r:X:q:tgv', \%opts);
 
 die (qq/
 #####################
@@ -33,12 +34,11 @@ Options:
 -?	 help
 -2	 keep non-biallelic sites
 -q INT   ploidy [$opts{q}]
--c INT   minimum high-quality site read depth (VCF DP4 sum) [$opts{c}] 
--d INT   minimum raw site read depth (VCF DP flag) [$opts{d}]
--D INT   maximum raw site read depth (VCF DP flag)[$opts{D}]
+-d INT   minimum site read depth [$opts{d}]
+-D INT   maximum site read depth [$opts{D}]
 -k INT   minimum number of 'covered' individuals (requires -u) [$opts{k}] 
 -u INT   minimum read depth for an individual to be considered 'covered' (requires -k) [$opts{u}]
--a INT   minimum number of high-quality alternate alleles for site [$opts{a}]
+-a INT   minimum number of alternate alleles for site [$opts{a}]
 -Q INT   minimum RMS mapping quality for SNPS [$opts{Q}]
 -S FLOAT min p-value for strand bias [$opts{S}]
 -b FLOAT min p-value for base quality bias [$opts{b}]
@@ -50,15 +50,13 @@ Options:
 -L FLOAT min p-value for exact test of defect of heterozygous [$opts{L}]
 -A FILE  ANCESTRAL fasta file (with FAI on same folder)
 -M CHAR  mutation type(s) to remove (ex. 'CT_GA') (requires -A)
--o FILE  where to write VCF format output of sites that pass QC, 'none' for no output [STDOUT]
--B FILE  file of sites that passed filters
--p FILE  name of file to dump sites that failed filters (bziped)
+-B CHAR  name of BED file for kept SNP positions
+-p CHAR  name of file to dump sites that failed filters (bziped)
 -r FILE  list of contigs to exclude
 -X FILE  BED file of exonic regions (sorted from lowest to highest contig)
 -t       filter non-exonic sites (requires -X)
--g       filter exons with SNPs out of HWE (requires -X)
+-g	 filter exons with SNPs out of HWE (requires -X)
 -v	 process nonvariants
--w       print only SNP positions to VCF output
 
 Generating input VCF with BCFtools:
 -run 'bcftools mpileup' with '-a SP,DP' to provide depth and strand bias info
@@ -72,7 +70,7 @@ be ignored by snpCleaner anyways.
 
 Output Notes:
 -bed format file is zero-based.
--FILTER field flags in the failed sites VCF (dumped with option -p) indicate filters that the sites
+-Characters preceeding filtered sites (dumped with option -p) indicate filters that the sites
  failed to pass and correspond to the option flags (e.g. 'S' indicates strand bias).
 \n/) if ($opts{'?'} || (!$ARGV[0] && -t STDIN));
 
@@ -97,23 +95,13 @@ else
 	}
 }
 
-my ($excont, @t, @seq, %exons, %ancestral);
+my ($excont, @t, @seq, @buffer, %exons, %ancestral);
 my ($n_sites, $ind_dp, $prev_format, @format, @ind_depth) = (0,0,"");
 
 #open some necessary filehandles
-
-my $vcfout;
-if (!$opts{o}) {
-	$vcfout = *STDOUT;
-} elsif ($opts{o} eq 'none'){
-	$vcfout = undef;
-} else {
-	open($vcfout, '>', $opts{o});
-}
-
 open(BED, '>', $opts{B}) or die("ERROR: could not create BED file: $!") if($opts{B});
-
 my $bz2 = new IO::Compress::Bzip2($opts{p}, 'Append' => 0) if($opts{p});
+
 
 # Read file with list of excluded contigs
 if($opts{r}) {
@@ -149,9 +137,8 @@ if($opts{X}) {
     close(EXON);
 }
 
-my %passpos = (seqid => '', start => 0, end => 0, lastreg => '');
 
-my ($cur_contig, $pos) = ('',0);
+my ($prev_contig, $cur_contig, $pos) = ('start','start',0);
 $" = "\t"; #for formatting printed output
 
 # check if input VCF is from @ARGV or STDIN
@@ -160,51 +147,43 @@ if (-t STDIN)
 	die ("No input VCF\n") unless @ARGV;
 }
 
-# print header
-while (<>) {
-	if (/^##/) {
-		print $vcfout $_ if ($vcfout);
-	} else {
-		print $vcfout $_ if ($vcfout);
-		last;
-	}
-}
-
 # The core loop
 while (<>) {
     my $violate = ''; # for flagging filter violations
 
     @t = split;
 
+    # Skip (and print) header lines
+    (print, next) if(m/^#/);
+
     # Update position
     $pos = $t[1];
 
-    # check if contig changed
+    # If contig changed
     if($t[0] ne $cur_contig){
-		$cur_contig = $t[0];
+	$prev_contig = $cur_contig;
+	$cur_contig = $t[0];
     }
 
+    # Skip sites with unknown ref
+    $violate .= 'N' if ($t[3] eq 'N');
+
     # Skip non-variable sites
-    if ($t[4] eq '.' && !$opts{v}) {
-    	#$violate .= 'v,';
-    	next;
-    }
+    $violate .= 'v' if ($t[4] eq '.' && !$opts{v});
 
     # Skip Indels
     if (length($t[3]) > 1 || length($t[4]) > 1) {
-	#$violate .= 'I,';
+	$violate .= 'I';
 	next;
     }
 
-    # flag unknown ref
-    $violate .= 'N,' if ($t[3] eq 'N');
+    # Skip sites from excluded contigs
+    $violate .= 'r' if ($opts{r} && $excont =~ /\b$cur_contig\b/);
 
-    # flag sites from excluded contigs
-    $violate .= 'r,' if ($opts{r} && $excont =~ /\b$cur_contig\b/);
+    # Skip non-biallelic Sites
 
-    # flag non-biallelic Sites
-    if(!$opts{2} && scalar(split(/,/,$t[4])) > 1) {
-	$violate .= '2,';
+    if( scalar(split(/,/,$t[4])) > 1 && !$opts{2} ) {
+	$violate .= '2';
     }
 
     # Read ANC base from FASTA
@@ -217,18 +196,18 @@ while (<>) {
 	$anc_base = 'N' if($anc_base =~ m/[RYSWKMBDHV]/i);
 	warn("WARNING: invalid ancestral base at ",$cur_contig,", pos ",$pos,": ",$anc_base,".\n") if($anc_base !~ m/[ACTGN]/i);
 
-	# flag if major and minor differ from ANCESTRAL
-	$violate .= "m($anc_base)," if($anc_base !~ m/\Q$t[3]\E|\Q$t[4]\E|N/i && $t[4] ne '.');
+	# Skip non-biallelic sites (major and minor differ from ANCESTRAL)
+	$violate .= "m($anc_base)" if($anc_base !~ m/\Q$t[3]\E|\Q$t[4]\E|N/i && $t[4] ne '.');
     }
 
-    # flag sites with specified mutation types
+    # Skip sites with specified mutation types
     if ($opts{M} && $t[3] =~ m/[ATCG]/i && $t[4] =~ m/[ATCG]/i) { # if site is variable
 	my $refalt=$t[3].$t[4];
 	my $altref=$t[4].$t[3];
 
 	if ($opts{M} =~ /($refalt|$altref)/i) {
 	    my @mutype = split("", $1);
-	    $violate .= "M," if ($anc_base !~ m/$mutype[1]/i);
+	    $violate .= "M" if ($anc_base !~ m/$mutype[1]/i);
 	}	
     }
     
@@ -253,26 +232,24 @@ while (<>) {
 	    $covcount++ if ($ind_info[$ind_dp] >= $opts{u});
 	    $ind_depth[$i] += $ind_info[$ind_dp];
 	}
-	$violate .= 'k,' if ($covcount < $opts{k});	
+	$violate .= 'k' if ($covcount < $opts{k});	
     }else {
 	warn("WARNING: no individual depth information at ",$cur_contig,", pos ",$pos,". Check for \"samtools mpileup -D\" option.");
     }
 
     # Site coverage 
-    my ($dp, $dp_hi, $dp_alt_hi) = (0,0,0);
-    $dp = $1 if ($t[7] =~ /DP=(\d+)/);
+    my ($dp, $dp_alt) = (0,0);
     if ($t[7] =~ m/DP4=(\d+),(\d+),(\d+),(\d+)/i) {
-	$dp_hi = $1 + $2 + $3 + $4;
-	$dp_alt_hi = $3 + $4;
+	$dp = $1 + $2 + $3 + $4;
+	$dp_alt = $3 + $4;
     }
-    $violate .= 'c,' if ($dp_hi < $opts{c});
-    $violate .= 'd,' if ($dp < $opts{d});
-    $violate .= 'D,' if ($dp > $opts{D});
-    $violate .= 'a,' if ($dp_hi > 0 && $dp_alt_hi < $opts{a});
+    $violate .= 'd' if ($dp < $opts{d});
+    $violate .= 'D' if ($dp > $opts{D});
+    $violate .= 'a' if ($dp > 0 && $dp_alt < $opts{a});
 
     # Root-mean-square mapping quality of covering reads
     my $mq = $1 if ($t[7] =~ m/MQ=(\d+)/i);
-    $violate .= 'Q,' if ($mq && $mq < $opts{Q});
+    $violate .= 'Q' if ($mq && $mq < $opts{Q});
 
     # Strand, baseQ, mapQ, and tail distance bias
     my ($strand, $baseqb, $mapqb, $tail_dist);
@@ -282,10 +259,10 @@ while (<>) {
 	$mapqb = $3;
 	$tail_dist = $4;
     }
-    $violate .= 'S,' if ($strand && $strand < $opts{S});
-    $violate .= 'b,' if ($baseqb && $baseqb < $opts{b});
-    $violate .= 'f,' if ($mapqb && $mapqb < $opts{f});
-    $violate .= 'e,' if ($tail_dist && $tail_dist < $opts{e});
+    $violate .= 'S' if ($strand && $strand < $opts{S});
+    $violate .= 'b' if ($baseqb && $baseqb < $opts{b});
+    $violate .= 'f' if ($mapqb && $mapqb < $opts{f});
+    $violate .= 'e' if ($tail_dist && $tail_dist < $opts{e});
 
     # Identify non-exonic regions
     my $exon_id = -1;
@@ -296,7 +273,7 @@ while (<>) {
 		     $pos <= $exons{$cur_contig}[$exon_id]{'end'});
 	}
 	$exon_id = -1 if($exon_id >= $n_exons);
-	$violate .= 't,' if ( $opts{t} && $exon_id < 0 );
+	$violate .= 't' if ( $opts{t} && $exon_id < 0 );
     }
     
     # HWE exact test
@@ -315,41 +292,34 @@ while (<>) {
 	my ($pHWE, $pHI, $pLOW) = hwe_exact($genocount{het},$genocount{homoa},$genocount{homob},$opts{F});
 	die(qq/Genotype counts less than 0\n/) if $pHWE == -1;
 	if ($pHWE < $opts{h}) {
-	    $violate .= "h(p=$pHWE),";
+	    $violate .= "h(p=$pHWE)";
 	    $exons{$cur_contig}[$exon_id]{'HWE'} = 1 if($exon_id > -1);
 	}
 	if ($pHI < $opts{H}) {
-	    $violate .= "H(p=$pHI),";
+	    $violate .= "H(p=$pHI)";
 	    $exons{$cur_contig}[$exon_id]{'HWE'} = 1 if($exon_id > -1);
 	}
 	if ($pLOW < $opts{L}) {
-	    $violate .= "L(p=$pLOW),";
+	    $violate .= "L(p=$pLOW)";
 	    $exons{$cur_contig}[$exon_id]{'HWE'} = 1 if($exon_id > -1);
 	}
     }
 
-	# flag exons with SNPs out of HWE
-	$violate .= 'g,' if ($opts{g} && $exon_id >= 0 && $exons{$cur_contig}[$exon_id]{HWE} == 1);
-    
-    # write output
-    $violate =~ s/,$//;
-    $t[6] = $violate ? $violate : '.';
-    writeVCF(\@t, $vcfout, $opts{w});
-    if ($opts{b} && !$violate) { 
-		if ($cur_contig ne $passpos{seqid} || $pos != $passpos{end}+1) {
-    		writeRegion(\%passpos) if ($passpos{seqid});
-    		$passpos{seqid} = $cur_contig;
-    		$passpos{start} = $pos;
-    		$passpos{end} = $pos;
-    		} else {
-    			$passpos{end}++;
-    		}
+    # remove exons with SNPs out of HWE
+    unless( $#buffer < 0 || 
+	    ($exon_id >= 0 &&
+	     $cur_contig eq $buffer[0]{'contig'} && 
+	     $exon_id == $buffer[0]{'exon_id'}) ) {
+
+	print_buffer($opts{g}, \@buffer, \%exons);
+	undef @buffer;
     }
     
-	$n_sites++;
+    push( @buffer, {'contig' => $cur_contig, 'exon_id' => $exon_id, 'pos' => $pos, 'violate' => $violate, 'vcf' => join("\t",@t)} );
+    $n_sites++;
 }
-
-writeRegion(\%passpos) if ($opts{b} && $passpos{lastreg} ne "$passpos{'seqid'}:$passpos{'start'}");
+# Force printing of last entry
+print_buffer($opts{g}, \@buffer, \%exons);
 
 print(STDERR $n_sites." sites processed!\n");
 # Print per-individual depth
@@ -361,7 +331,6 @@ for(my $i=0; $i <= $#ind_depth; $i++) {
 close FASTA if($opts{A});
 close BED if($opts{B});
 $bz2->close if($opts{p});
-close $vcfout if ($vcfout);
 
 
 exit(0);
@@ -370,26 +339,21 @@ exit(0);
 #################
 ### Functions ###
 #################
-sub writeVCF {
-	my ($vcf, $vcffh, $snponly) = @_;
-	if ($$vcf[6] eq '.') {
-		if ($vcffh) {
-			print $vcffh "@{$vcf}\n" unless ($snponly && $$vcf[4] eq '.');
-		}
-	} else {
-		$bz2->print("@{$vcf}\n") if ($opts{p});
+sub print_buffer {
+    my ($opts_g, $buffer, $exons) = @_;
+
+    foreach my $g (@$buffer) {
+	$g->{'violate'} .= 'g' if($opts_g && $g->{'exon_id'} >= 0 && $exons->{$g->{'contig'}}[$g->{'exon_id'}]{'HWE'} == 1);
+	
+	if( !$g->{'violate'} ){
+	    print($g->{'vcf'}."\n");
+	    print(BED $g->{'contig'}."\t".($g->{'pos'}-1)."\t".$g->{'pos'}."\n") if $opts{B};
+	}else{
+	    $bz2->print($g->{'violate'}."\t".$g->{'vcf'}."\n") if($opts{p});
 	}
+    }
 }
 
-sub writeRegion {
-	my $region = $_[0];
-	if ($region->{'seqid'}) {
-		my $r = "$region->{'seqid'}:$region->{'start'}";
-		$region->{'lastreg'} = $r;
-		$r .= "-$region->{'end'}" if ($region->{'start'} != $region->{'end'});
-		print BED "$r\n";
-	}
-}
 
 
 sub hwe_exact {
