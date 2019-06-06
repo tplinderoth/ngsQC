@@ -2,8 +2,10 @@
  * vcfCleaner.cpp
  *
  * TODO:
- * - dynamically set infosize (number of INFO IDs) based on VCF header
- * - implement accurate multiallelic filtering, e.g. maf filtering
+ * 1) dynamically set infosize (number of INFO IDs) based on VCF header
+ * 2) implement accurate multiallelic filtering, e.g. maf filtering
+ * 3) Boost does not play well with bgzipped files (segfaults or leaves off the last line), so need to
+ * switch over to using htslib to parse VCF. Gzipped files are fine.
  */
 
 #include "vcfCleaner.h"
@@ -14,14 +16,17 @@
 #include <sstream>
 #include <fstream>
 #include <cstdlib>
+#include <boost/iostreams/filtering_streambuf.hpp>
+#include <boost/iostreams/copy.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
 
 int main (int argc, char** argv) {
 	int rv = 0;
 
-	std::fstream invcf; // input vcf
-	std::fstream outvcf; // filtered output vcf
-	std::fstream pass; // quality passed list of sites
-	std::fstream fail; // failed sites
+	std::ifstream invcf; // input vcf
+	std::ofstream outvcf; // filtered output vcf
+	std::ofstream pass; // quality passed list of sites
+	std::ofstream fail; // failed sites
 
 	if (argc < 2) {
 		maininfo();
@@ -57,10 +62,11 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	int w1=20;
 	int w2=8;
 
-	std::cerr << "\nThis program is for filtering VCFs produced by GATK's HaplotypeCaller/GenotypeGVCFs workflow\n"
-	<< "Indels are ignored and not included in files containing filtered sites\n"
+	std::cerr << "\nThis program is for filtering VCFs produced by GATK's HaplotypeCaller/GenotypeGVCFs workflow.\n"
+	<< "Takes uncompressed and gzipped/bgzipped VCFs, however bgzipped reading can be buggy so use at your own risk.\n"
+	<< "Indels are ignored and not included in files containing filtered sites.\n"
 	<< "\nvcfCleaner gatk [arguments]\n\n"
-	<< std::setw(w1) << std::left << "-vcf" << std::setw(w2) << std::left << "FILE" << "Input VCF file to filter\n"
+	<< std::setw(w1) << std::left << "-vcf" << std::setw(w2) << std::left << "FILE" << "Input VCF file to filter ('-' for STDIN)\n"
 	<< std::setw(w1) << std::left << "-out" << std::setw(w2) << std::left << "STRING" << "Output file name (prefix)\n"
 	<< std::setw(w1) << std::left << "-biallelic" << std::setw(w2) << std::left << "0|1" << "0: keep multiallelic sites, 1: keep only biallelic sites, A [" << biallelic << "]\n"
 	<< std::setw(w1) << std::left << "-allsites" << std::setw(w2) << std::left << "0|1" << "0: process only SNPs, 1: process all sites (except indels) [" << allsites << "]\n"
@@ -87,7 +93,7 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	<< "\n";
 }
 
-int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos) {
+int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf, std::ofstream &passpos, std::ofstream &failpos) {
 	int rv = 0;
 
 	// filtering parameters
@@ -110,32 +116,47 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	int varonly = 1; // The INFO for SNP-only VCF must have AF in 1=range (0,1), or 0=range [0,1]
 	double mafcutoff = 0.0; // minor allele frequency lower bound for SNP-only VCF
 	int verbose = 2; // amount of warnings outputted, 0=none, 1=site level, 2=individual level
+	int infmt = 0; // 0=uncompressed vcf, 1=gzipped input, 2=uncompressed standard input
 
 	if ((rv=parseGATKargs(argc, argv, invcf, outvcf, passpos, failpos, biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov,
-			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, mafcutoff, verbose))) {
+			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, mafcutoff, verbose, infmt))) {
 		if (rv > 0)
 			return 0;
 		else if (rv < 0)
 			return -1;
 	}
 
+	// set up zipped file reading if necessary
+	std::streambuf *inbuf = NULL;
+	boost::iostreams::filtering_streambuf<boost::iostreams::input> zipbuf;
+	zipbuf.push(boost::iostreams::gzip_decompressor());
+	if (infmt == 0) {
+		inbuf = invcf.rdbuf();
+	}
+	else if (infmt == 1) {
+		zipbuf.push(invcf);
+		inbuf = &zipbuf;
+	} else if (infmt == 2) {
+		inbuf = std::cin.rdbuf();
+	}
+	std::istream instream(inbuf);
+
 	// process VCF file
 	std::string vcfline;
 	std::vector<std::string> vcfvec;
 	std::vector<std::string>::iterator iter;
 
-	// skip headers and set up vector to hold tokens
-	getline(invcf, vcfline);
-	while (!vcfline.empty()) {
+	// print headers and set up vector to hold tokens
+	while (getline(instream, vcfline)) {
 		outvcf << vcfline << "\n";
 		if (vcfline[0] != '#' || vcfline[1] != '#')
 			break;
-		getline(invcf, vcfline);
 	}
+
 	std::stringstream ss(vcfline);
 	std::string tok;
 	while (ss >> tok) {
-		vcfvec.push_back(tok);
+		vcfvec.push_back("");
 	}
 	vcfvec.resize(vcfvec.size());
 	unsigned int nind = vcfvec.size()-9;
@@ -168,26 +189,28 @@ int gatkvcf (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, s
 	unsigned int pos = 0;
 	double maf = 0.0;
 
-	while (!invcf.eof()) {
+	while (getline(instream, vcfline)) {
 	// assume vcf fields are [0]=CHROM, [1]=POS, [2]=ID, [3]=REF, [4]=ALT, [5]=QUAL, [6]=FILTER, [7]=INFO, [8]=FORMAT
 
-		// get a new site
-		getline(invcf,vcfline);
-		if (vcfline.empty()) break;
-		ss.str(std::string());
+		// fill up site information vector
 		ss.clear();
 		ss.str(vcfline);
-		iter = vcfvec.begin();
+		iter=vcfvec.begin();
 		while (ss >> *iter) {
 			++iter;
 		}
+		if (iter < vcfvec.end()) {
+			std::cerr << "Input VCF appears truncated\n";
+			return -1;
+		}
+
+		// process site
 		badflags.clear();
 		pos = atoi(vcfvec[1].c_str());
 
 		// check for completely missing data
 		if (vcfvec[7] == ".") {
 			badflags.push_back('N');
-
 		} else {
 			// check QUAL
 			if (atoi(vcfvec[5].c_str()) < qual) {
@@ -363,7 +386,7 @@ int isMultiSNP (std::vector<std::string> &vcfvec) {
 	return 0;
 }
 
-region* updateRegion (vcfrecord &site, region& goodpos, std::fstream& outstream) {
+region* updateRegion (vcfrecord &site, region& goodpos, std::ofstream& outstream) {
 	if (goodpos.start == 0) {
 		goodpos.makeNew(site.contig, site.pos);
 	} else if (site.pos - goodpos.end == 1) {
@@ -383,7 +406,7 @@ region* updateRegion (vcfrecord &site, region& goodpos, std::fstream& outstream)
 	return &goodpos;
 }
 
-std::fstream* writeBads (std::string& flags, std::string &contig, const unsigned int* pos, std::fstream& outstream) {
+std::ofstream* writeBads (std::string& flags, std::string &contig, const unsigned int* pos, std::ofstream& outstream) {
 	if (!outstream.is_open()) {
 		std::cerr << "Unable to write qc-failed site information to unopened outstream\n";
 		return NULL;
@@ -607,10 +630,10 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 	}
 }
 
-int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &outvcf, std::fstream &passpos, std::fstream &failpos,
+int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf, std::ofstream &passpos, std::ofstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double& qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &verbose) {
+	double& qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &verbose, int &infmt) {
 
 	int rv = 0;
 
@@ -630,10 +653,19 @@ int parseGATKargs (int argc, char** argv, std::fstream &invcf, std::fstream &out
 		if (strcmp(argv[argpos], "-vcf") == 0) {
 			// input VCF
 			invcf_name = argv[argpos+1];
-			invcf.open(argv[argpos+1], std::ios::in);
-			if (! invcf) {
-				std::cerr << "Unable to open input VCF " << argv[argpos+1] << "\n";
-				return -1;
+			if (strcmp(invcf_name, "-") == 0) {
+				infmt = 2; // reading from standard input
+			} else {
+				invcf.open(argv[argpos+1], std::ios_base::in | std::ios_base::binary);
+				if (! invcf) {
+					std::cerr << "Unable to open input VCF " << argv[argpos+1] << "\n";
+					return -1;
+				}
+				// check for gzipped file by reading magic numbers
+				unsigned char magic [2] = {0};
+				invcf.read(reinterpret_cast<char*>(magic), sizeof(magic));
+				infmt = (magic[0] == 0x1f && magic[1] == 0x8b) ? 1 : 0;
+				invcf.seekg(0, std::ios_base::beg);
 			}
 		}
 
@@ -933,7 +965,7 @@ void region::makeNew (std::string &seqid, unsigned int pos) {
 	entries = 1;
 }
 
-std::fstream* region::write (std::fstream& outstream) {
+std::ofstream* region::write (std::ofstream& outstream) {
 	if (! outstream.is_open()) {
 		std::cerr << "Unable to write qc-passed region information to unopened outstream\n";
 		return NULL;

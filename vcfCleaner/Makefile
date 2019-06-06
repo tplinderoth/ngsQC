@@ -5,7 +5,7 @@ BIN = vcfCleaner expandrf vcf2bimbam vcf2sweepfinder
 all: $(BIN)
 
 vcfCleaner: vcfCleaner.cpp vcfCleaner.h
-	$(CXX) $(CXXFLAGS) vcfCleaner.cpp -o vcfCleaner
+	$(CXX) $(CXXFLAGS) vcfCleaner.cpp -o vcfCleaner -lz -lboost_iostreams
 expandrf: expandrf.cpp
 	$(CXX) $(CXXFLAGS) expandrf.cpp -o expandrf
 vcf2bimbam: vcf2bimbam.cpp

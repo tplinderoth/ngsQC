@@ -30,12 +30,13 @@ Run `vcfCleaner gatk` without arguments to display usage information:
 
 	./vcfCleaner gatk
 
-	This program is for filtering VCFs produced by GATK's HaplotypeCaller/GenotypeGVCFs workflow
-	Indels are ignored and not included in files containing filtered sites
+	This program is for filtering VCFs produced by GATK's HaplotypeCaller/GenotypeGVCFs workflow.
+	Takes uncompressed and gzipped/bgzipped VCFs, however bgzipped reading can be buggy so use at your own risk.
+	Indels are ignored and not included in files containing filtered sites.
 
 	vcfCleaner gatk [arguments]
 
-	-vcf                FILE    Input VCF file to filter
+	-vcf                FILE    Input VCF file to filter ('-' for STDIN)
 	-out                STRING  Output file name (prefix)
 	-biallelic          0|1     0: keep multiallelic sites, 1: keep only biallelic sites, A [1]
 	-allsites           0|1     0: process only SNPs, 1: process all sites (except indels) [0]
