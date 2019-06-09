@@ -244,7 +244,6 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 						if (indcounts[1] < minind) badflags.push_back('U');
 
 						// examine INFO field
-						infostream.str(std::string());
 						infostream.clear();
 						infostream.str(vcfvec[7]);
 						i=0;
@@ -615,7 +614,7 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 			flags->push_back('S');
 		}
 
-		else if (strcmp(id, "BaseQRankSum") == 0 && fabs(v) > baseqbias) {
+		else if (strcmp(id, "BaseQRankSum") == 0 && absv > baseqbias) {
 			flags->push_back('B');
 		}
 
