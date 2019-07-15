@@ -57,14 +57,14 @@ void maininfo () {
 
 void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
-	double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &verbose) {
+	double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels, int &verbose) {
 
 	int w1=20;
 	int w2=8;
 
 	std::cerr << "\nThis program is for filtering VCFs produced by GATK's HaplotypeCaller/GenotypeGVCFs workflow.\n"
 	<< "Takes uncompressed and gzipped/bgzipped VCFs, however bgzipped reading can be buggy so use at your own risk.\n"
-	<< "Indels are ignored and not included in files containing filtered sites.\n"
+	<< "For multiallelic sites only overall site depth, map quality, and variant quality filters are supported.\n"
 	<< "\nvcfCleaner gatk [arguments]\n\n"
 	<< std::setw(w1) << std::left << "-vcf" << std::setw(w2) << std::left << "FILE" << "Input VCF file to filter ('-' for STDIN)\n"
 	<< std::setw(w1) << std::left << "-out" << std::setw(w2) << std::left << "STRING" << "Output file name (prefix)\n"
@@ -84,6 +84,7 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	<< std::setw(w1) << std::left << "-qual" << std::setw(w2) << std::left << "FLOAT" << "Min Phred-scaled quality score of ALT assertion, Q [" << qual << "]\n"
 	<< std::setw(w1) << std::left << "-varq_depth" << std::setw(w2) << std::left << "FLOAT" << "Min variant Phred-scaled confidence/quality by depth, V [" << varqual_depth << "]\n"
 	<< std::setw(w1) << std::left << "-hetexcess" << std::setw(w2) << std::left << "FLOAT" << "Max Phred-scaled p-value for exact test of excess heterozygosity, H [" << hetexcess << "]\n"
+	<< std::setw(w1) << std::left << "-rmvIndels" << std::setw(w2) << std::left << "0|1" << "0: process indels, 1: sites with indels are discarded (still count towards multiallelic sites) [" << rmvIndels << "]\n"
 	<< std::setw(w1) << std::left << "-varonly" << std::setw(w2) << std::left << "0|1" << "The INFO AF for SNP-only output VCF must be in range 0=[0,1], or 1=(0,1) [" << varonly << "]\n"
 	<< std::setw(w1) << std::left << "-maf" << std::setw(w2) << std::left << "FLOAT" << "Minor allele frequency lower bound for SNP-only VCF [" << maf << "]\n"
 	<< std::setw(w1) << std::left << "-verbose" << std::setw(w2) << std::left << "0|1|2" << "Level of warnings to issue: 0 = suppress all, 1 = site-level, 2 = individual-level [" << verbose << "]\n"
@@ -117,14 +118,18 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 	double mafcutoff = 0.0; // minor allele frequency lower bound for SNP-only VCF
 	int verbose = 2; // amount of warnings outputted, 0=none, 1=site level, 2=individual level
 	int infmt = 0; // 0=uncompressed vcf, 1=gzipped input, 2=uncompressed standard input
+	int rmvIndels = 1; // 0 = process indels, 1 = discard sites with indels (indels still count towards identifying multiallelic sites)
 
 	if ((rv=parseGATKargs(argc, argv, invcf, outvcf, passpos, failpos, biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov,
-			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, mafcutoff, verbose, infmt))) {
+			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, mafcutoff, rmvIndels, verbose, infmt))) {
 		if (rv > 0)
 			return 0;
 		else if (rv < 0)
 			return -1;
 	}
+
+	// determine if individual info needs to be checked
+	int parseIndividuals = (minind == 0 && mingeno == 0) ? 0 : 1;
 
 	// set up zipped file reading if necessary
 	std::streambuf *inbuf = NULL;
@@ -188,6 +193,8 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 
 	unsigned int pos = 0;
 	double maf = 0.0;
+	int isMultiAllelic = 0;
+	int isIndel = 0;
 
 	while (getline(instream, vcfline)) {
 	// assume vcf fields are [0]=CHROM, [1]=POS, [2]=ID, [3]=REF, [4]=ALT, [5]=QUAL, [6]=FILTER, [7]=INFO, [8]=FORMAT
@@ -208,66 +215,65 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 		badflags.clear();
 		pos = atoi(vcfvec[1].c_str());
 
-		// check for completely missing data
 		if (vcfvec[7] == ".") {
+			// check for completely missing data
 			badflags.push_back('N');
-		} else {
-			// check QUAL
-			if (atoi(vcfvec[5].c_str()) < qual) {
-				badflags.push_back('Q');
-			}
-			// check the type of site
-			if (vcfvec[3].size() > 1 || vcfvec[4].size() > 1 || vcfvec[4] == "*") {
-				if (biallelic && isMultiSNP(vcfvec)) {
-					// multi-allelic
+		} else if ( vcfvec[3].size() == 1 && (vcfvec[3]=="A" || vcfvec[3]=="C" || vcfvec[3]=="G" || vcfvec[3]=="T" || vcfvec[3]=="N") == 0 ) {
+			// check for unknown reference allele
+			badflags.push_back('F');
+		} else  {
+			if (allsites || vcfvec[4] != ".") {
+				siteType(vcfvec, &isMultiAllelic, &isIndel);
+
+				// check for multiallelic sites
+				if (biallelic && isMultiAllelic) {
 					badflags.push_back('A');
-				} else {
-					// indel, *=deletion
+				}
+
+				// check for indels
+				if (rmvIndels && isIndel) {
 					badflags.push_back('I');
 				}
-			} else {
-				if (vcfvec[3] == "A" || vcfvec[3] == "C" || vcfvec[3] == "G" || vcfvec[3] == "T") {
 
-					if (allsites || vcfvec[4] != ".") {
+				// check QUAL
+				if (atoi(vcfvec[5].c_str()) < qual) {
+					badflags.push_back('Q');
+				}
 
-						// extract individual information
-						if (extractIndInfo(vcfvec, indcounts, minind_cov, verbose)) {
-							return -1;
-						}
-
-						// check number of genotyped individuals
-						//std::cerr << indcounts[0] << "\n"; //debug
-						if (indcounts[0] < mingeno) badflags.push_back('G');
-
-						// check number of individuals with data
-						//std::cerr << indcounts[1] << "\n"; //debug
-						if (indcounts[1] < minind) badflags.push_back('U');
-
-						// examine INFO field
-						infostream.clear();
-						infostream.str(vcfvec[7]);
-						i=0;
-
-						while (std::getline(infostream, infovec[i], ';')) {
-							++i;
-						}
-
-						checkGatkInfo(infovec, i, &badflags, mincov, maxcov, rms_mapq, mqRankSum, posbias, strandbias,
-								baseqbias, varqual_depth, hetexcess);
-
-						// get allele frequency info for potential snp
-						if (vcfvec[4] != ".") {
-							maf = getMaf(vcfvec, verbose);
-						} else {
-							maf = 0.0;
-						}
+				if (parseIndividuals) {
+					// extract individual information
+					if (extractIndInfo(vcfvec, indcounts, minind_cov, verbose)) {
+						return -1;
 					}
 
+					// check number of genotyped individuals
+					//std::cerr << indcounts[0] << "\n"; //debug
+					if (indcounts[0] < mingeno) badflags.push_back('G');
+
+					// check number of individuals with data
+					//std::cerr << indcounts[1] << "\n"; //debug
+					if (indcounts[1] < minind) badflags.push_back('U');
+				}
+
+				// examine INFO field
+				infostream.clear();
+				infostream.str(vcfvec[7]);
+				i=0;
+
+				while (std::getline(infostream, infovec[i], ';')) {
+					++i;
+				}
+
+				checkGatkInfo(infovec, i, &badflags, mincov, maxcov, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, varqual_depth, hetexcess);
+
+				// get allele frequency info for potential snp
+				if (vcfvec[4] != ".") {
+					maf = getMaf(vcfvec, verbose);
 				} else {
-					// unknown reference allele
-					badflags.push_back('F');
+					maf = 0.0;
 				}
 			}
+
 		}
 
 		if (!vcfinfo.entry.empty()) {
@@ -342,22 +348,36 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 }
 
 double getMaf (const std::vector<std::string> &vcfvec, int verbose) {
-	// only returns frequency of first-listed ALT allele
+	// returns largest MAF (when there are multiple alleles)
 	static char f [30];
+	double maf = 0.0;
+	double maxmaf = 0.0;
+	double freq;
 	f[0] = '\0';
 	int j=0;
 	static std::string info;
 	info.clear();
-	info = (vcfvec[7]);
+	info = vcfvec[7];
 	for (unsigned int i=0; i<info.size(); ++i) {
 		if (i+2 < info.size() && info[i]=='A' && info[i+1]=='F' && info[i+2]=='=') {
 			i += 3;
-			while (i < info.size() && info[i] != ';' && info[i] != ',') {
+			while (i < info.size() && info[i] != ';') {
 				f[j] = info[i];
 				++j;
 				++i;
+				if (info[i] == ',') {
+					f[j] = '\0';
+					freq = atof(f);
+					maf = (freq < 0.5) ? freq : 1.0-freq;
+					if (maf > maxmaf) maxmaf = maf;
+					++i;
+					j = 0;
+				}
 			}
 			f[j] = '\0';
+			freq = atof(f);
+			maf = (freq < 0.5) ? freq : 1.0-freq;
+			if (maf > maxmaf) maxmaf = maf;
 			break;
 		}
 	}
@@ -367,22 +387,37 @@ double getMaf (const std::vector<std::string> &vcfvec, int verbose) {
 		return -1.0;
 	}
 
-	double freq = atof(f);
-	return (freq < 0.5 ? freq : 1.0-freq);
+	return maxmaf;
 }
 
-int isMultiSNP (std::vector<std::string> &vcfvec) {
-	unsigned int i;
+void siteType (std::vector<std::string> & vcfvec, int* isMultiAllelic, int* isIndel) {
 
-	for (i=0; i<vcfvec[4].size(); ++i) {
-		if (vcfvec[4][i] == ',') return 1;
+	*isMultiAllelic = 0;
+	*isIndel = 0;
+
+	if (vcfvec[3].size() > 1 && vcfvec[4] != ".") {
+		*isIndel = 1;
 	}
 
-	for (i=0; i<vcfvec[3].size(); ++i) {
-		if (vcfvec[3][i] == ',') return 1;
+	if (vcfvec[4] == "*") {
+		*isIndel = 1; // deletion
 	}
 
-	return 0;
+	if (vcfvec[4].size() > 1) {
+		static std::string allele;
+		allele.clear();
+		for (unsigned int i=0; i<vcfvec[4].size(); ++i) {
+			if (vcfvec[4][i] == ',') {
+				*isMultiAllelic = 1;
+				if (allele.size() > 1 || allele == "*") {
+					*isIndel = 1;
+				}
+				allele.clear();
+			} else {
+				allele.push_back(vcfvec[4][i]);
+			}
+		}
+	}
 }
 
 region* updateRegion (vcfrecord &site, region& goodpos, std::ofstream& outstream) {
@@ -409,11 +444,6 @@ std::ofstream* writeBads (std::string& flags, std::string &contig, const unsigne
 	if (!outstream.is_open()) {
 		std::cerr << "Unable to write qc-failed site information to unopened outstream\n";
 		return NULL;
-	}
-
-	for (unsigned int i=0; i<flags.size(); ++i) {
-		// don't output sites that are indels
-		if (flags[i] == 'I') return &outstream;
 	}
 
 	//std::cerr << contig << "\t" << *pos << "\t" << flags << "\n"; //debug
@@ -632,13 +662,13 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf, std::ofstream &passpos, std::ofstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double& qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &verbose, int &infmt) {
+	double& qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels, int &verbose, int &infmt) {
 
 	int rv = 0;
 
 	if (argc < 6) {
 		gatkinfo(biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov, minind, mingeno, rms_mapq, mqRankSum,
-				posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, maf, verbose);
+				posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, maf, rmvIndels, verbose);
 		return 1;
 	}
 
@@ -698,8 +728,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 			biallelic = atoi(argv[argpos+1]);
 			switch (biallelic) {
 				case 0:
-					std::cerr << "retaining multiallelic sites (-biallelic 0) is still in development...\n";
-					return 1;
+					break;
 				case 1:
 					break;
 				default:
@@ -877,6 +906,20 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 			}
 		}
 
+		else if (strcmp(argv[argpos], "-rmvIndels") == 0) {
+			// decide whether to discard sites with indels
+			rmvIndels = atoi(argv[argpos+1]);
+			switch (rmvIndels) {
+				case 0 :
+					break;
+				case 1	:
+					break;
+				default	:
+					std::cerr << "-rmvIndels must be 0 (process indels) or 1 (discard indels)\n";
+					return -1;
+			}
+		}
+
 		else if (strcmp(argv[argpos], "-verbose") == 0) {
 			// level of warnings to issue
 			verbose = atoi(argv[argpos+1]);
@@ -907,7 +950,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 
 	printUserArgs(invcf_name, outvcf_name, goodpos_name, badpos_name, biallelic, allsites, allsites_vcf, maxcov,
 			mincov, minind_cov, minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess,
-			varonly, maf);
+			varonly, maf, rmvIndels);
 
 	return rv;
 }
@@ -915,7 +958,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::string &goodpos_name, std::string &badpos_name,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double &qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf) {
+	double &qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels) {
 
 	int w=20;
 	std::cerr << "\n"
@@ -941,6 +984,7 @@ void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::strin
 	<< std::setw(w) << std::left << "hetexcess: " << hetexcess << "\n"
 	<< std::setw(w) << std::left << "varonly: " << varonly << "\n"
 	<< std::setw(w) << std::left << "maf: " << maf << "\n"
+	<< std::setw(w) << std::left << "rmvIndels: " << rmvIndels << "\n"
 	<< "\n";
 }
 
