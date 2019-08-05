@@ -23,16 +23,20 @@ struct region {
 };
 
 struct vcfrecord {
-	vcfrecord(size_t flagcapacity = 0);
-	void newEntry (std::string* vcfline, std::string* id, unsigned int* position,
-			char altallele, double allelef, std::string* f = NULL);
-
-	std::string entry;
-	std::string flags;
+	vcfrecord();
+	void reserveFields (unsigned int nfields);
+	void reserveFlags (unsigned int nflags);
+	void clearFlags ();
+	void setSite ();
+	void setFlag (int i);
 	std::string contig;
 	unsigned int pos;
-	char alt;
+	std::string ref;
+	std::string alt;
 	double af;
+	int qcfail; // number of set flags
+	std::vector<std::string> fields; // tokenized vcf line
+	std::vector< std::pair<std::string,int> > flags; // QC-fail flags
 };
 
 // functions
@@ -41,14 +45,14 @@ void maininfo ();
 
 void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
-	double &varqual_depth, double &hetexcess, int &varonly, double &maf, int& rmvIndels, int &verbose);
+	double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels, int &siteOnly, int &printFilter, int &verbose);
 
 int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf, std::ofstream &passpos, std::ofstream &failpos);
 
 int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf, std::ofstream &passpos, std::ofstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double& qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels, int &verbose, int& infmt);
+	double& qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels, int &siteOnly, int &printFilter, int &verbose, int& infmt);
 
 int parseFormat (std::vector<std::string> &vcfvec, int* index);
 
@@ -58,19 +62,24 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 
 void siteType (std::vector<std::string> & vcfvec, int* isMultiAllelic, int* isIndel);
 
-region* updateRegion (vcfrecord& site, region& goodpos, std::ofstream& outstream);
+region* updateRegion (vcfrecord* site, region& goodpos, std::ofstream& outstream);
 
-std::ofstream* writeBads (std::string& flags, std::string &contig, const unsigned int* pos, std::ofstream& outstream);
+std::ofstream* writeBads (vcfrecord* vcfrec, std::ofstream& outstream);
 
-void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, const unsigned int &mincov, const unsigned int &maxcov,
+void checkGatkInfo(vcfrecord* vcfrec, const unsigned int &mincov, const unsigned int &maxcov,
 	const double &rms_mapq, const double &mqRankSum, const double &posbias, const double &strandbias, const double &baseqbias,
 	const double & varqual_depth, const double &hetexcess);
 
 double getMaf (const std::vector<std::string> &vcfvec, int verbose);
 
+int recordSite (vcfrecord* site, region &keep, std::ofstream &vcfstream, std::ofstream &goodstream, std::ofstream &failstream,
+		const int &allsites_vcf, const int &printFilter, const int &siteOnly, const int &varonly, const double &mafcutoff, const int &allsites);
+
+void writeVcf (vcfrecord* vcfrec, std::ofstream &os, const int &siteOnly, const int &printFilter);
+
 void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::string &goodpos_name, std::string &badpos_name,
-	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
-	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double &qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels);
+	int biallelic, int allsites, int allsites_vcf, unsigned int maxcov, unsigned int mincov, unsigned int minind_cov,
+	unsigned int minind, unsigned int mingeno, double rms_mapq, double mqRankSum, double posbias, double strandbias, double baseqbias,
+	double qual, double varqual_depth, double hetexcess, int varonly, double maf, int rmvIndels, int siteOnly, int printFilter);
 
 #endif /* VCFCLEANER_H_ */

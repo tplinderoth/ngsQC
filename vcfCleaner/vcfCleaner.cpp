@@ -57,7 +57,7 @@ void maininfo () {
 
 void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias, double &qual,
-	double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels, int &verbose) {
+	double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels, int &siteOnly, int &printFilter, int &verbose) {
 
 	int w1=20;
 	int w2=8;
@@ -68,29 +68,28 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	<< "\nvcfCleaner gatk [arguments]\n\n"
 	<< std::setw(w1) << std::left << "-vcf" << std::setw(w2) << std::left << "FILE" << "Input VCF file to filter ('-' for STDIN)\n"
 	<< std::setw(w1) << std::left << "-out" << std::setw(w2) << std::left << "STRING" << "Output file name (prefix)\n"
-	<< std::setw(w1) << std::left << "-biallelic" << std::setw(w2) << std::left << "0|1" << "0: keep multiallelic sites, 1: keep only biallelic sites, A [" << biallelic << "]\n"
-	<< std::setw(w1) << std::left << "-allsites" << std::setw(w2) << std::left << "0|1" << "0: process only SNPs, 1: process all sites (except indels) [" << allsites << "]\n"
-	<< std::setw(w1) << std::left << "-allsites_vcf" << std::setw(w2) << std::left << "0|1" << "Output VCF contains QC-passed 0: SNPs only, 1: all sites [" << allsites_vcf << "]\n"
-	<< std::setw(w1) << std::left << "-maxcov" << std::setw(w2) << std::left << "INT" << "Max total site depth, D [" << maxcov << "]\n"
-	<< std::setw(w1) << std::left << "-mincov" << std::setw(w2) << std::left << "INT" << "Min total site depth, C [" << mincov << "]\n"
+	<< std::setw(w1) << std::left << "-biallelic" << std::setw(w2) << std::left << "" << "Discard multiallelic variants\n"
+	<< std::setw(w1) << std::left << "-allsites" << std::setw(w2) << std::left << "" << "Process all sites (variable and nonvariable)\n"
+	<< std::setw(w1) << std::left << "-allsites_vcf" << std::setw(w2) << std::left << "" << "Output VCF contains both variable and nonvariable sites\n"
+	<< std::setw(w1) << std::left << "-siteOnly" << std::setw(w2) << std::left << "" << "Do not print individual information to output VCF\n"
+	<< std::setw(w1) << std::left << "-printFilter" << std::setw(w2) << std::left << "0|1|2" << "0: Discard QC-failed sites. 1: Overwrite, or, 2: append to FILTER field [" << printFilter << "]\n"
+	<< std::setw(w1) << std::left << "-maxcov" << std::setw(w2) << std::left << "INT" << "Max total site depth [" << maxcov << "]\n"
+	<< std::setw(w1) << std::left << "-mincov" << std::setw(w2) << std::left << "INT" << "Min total site depth [" << mincov << "]\n"
 	<< std::setw(w1) << std::left << "-minind_cov" << std::setw(w2) << std::left << "INT" << "Min individual coverage [" << minind_cov << "]\n"
-	<< std::setw(w1) << std::left << "-minind" << std::setw(w2) << std::left << "INT" << "Min number of individuals covered by at least -minind_cov reads, U [" << minind << "]\n"
-	<< std::setw(w1) << std::left << "-mingeno" << std::setw(w2) << std::left << "INT" << "Min number of individuals with called genotype, G [" << mingeno << "]\n"
-	<< std::setw(w1) << std::left << "-rms_mapq" << std::setw(w2) << std::left << "FLOAT" << "Min RMS mapping quality, R [" << rms_mapq << "]\n"
-	<< std::setw(w1) << std::left << "-mapqRankSum" << std::setw(w2) << std::left << "FLOAT" << "Max absolute Wilcoxon rank sum test Z-score of alt vs. ref read map quality, M [" << mqRankSum << "]\n"
-	<< std::setw(w1) << std::left << "-posbias" << std::setw(w2) << std::left << "FLOAT" << "Max absolute Wilcoxon rank sum test Z-score of alt vs. ref read position bias, P [" << posbias << "]\n"
-	<< std::setw(w1) << std::left << "-strandbias" << std::setw(w2) << std::left << "FLOAT" << "Max Phred-scaled Fisher's exact test p-value of strand bias, S [" << strandbias << "]\n"
-	<< std::setw(w1) << std::left << "-baseqbias" << std::setw(w2) << std::left << "FLOAT" << "Max absolute Wilcoxon rank sum test Z-score of alt vs ref base qualities, B [" << baseqbias << "]\n"
-	<< std::setw(w1) << std::left << "-qual" << std::setw(w2) << std::left << "FLOAT" << "Min Phred-scaled quality score of ALT assertion, Q [" << qual << "]\n"
-	<< std::setw(w1) << std::left << "-varq_depth" << std::setw(w2) << std::left << "FLOAT" << "Min variant Phred-scaled confidence/quality by depth, V [" << varqual_depth << "]\n"
-	<< std::setw(w1) << std::left << "-hetexcess" << std::setw(w2) << std::left << "FLOAT" << "Max Phred-scaled p-value for exact test of excess heterozygosity, H [" << hetexcess << "]\n"
-	<< std::setw(w1) << std::left << "-rmvIndels" << std::setw(w2) << std::left << "0|1" << "0: process indels, 1: sites with indels are discarded (still count towards multiallelic sites) [" << rmvIndels << "]\n"
-	<< std::setw(w1) << std::left << "-varonly" << std::setw(w2) << std::left << "0|1" << "The INFO AF for SNP-only output VCF must be in range 0=[0,1], or 1=(0,1) [" << varonly << "]\n"
+	<< std::setw(w1) << std::left << "-minind" << std::setw(w2) << std::left << "INT" << "Min number of individuals covered by at least -minind_cov reads [" << minind << "]\n"
+	<< std::setw(w1) << std::left << "-mingeno" << std::setw(w2) << std::left << "INT" << "Min number of individuals with called genotype [" << mingeno << "]\n"
+	<< std::setw(w1) << std::left << "-rms_mapq" << std::setw(w2) << std::left << "FLOAT" << "Min RMS mapping quality [" << rms_mapq << "]\n"
+	<< std::setw(w1) << std::left << "-mapqRankSum" << std::setw(w2) << std::left << "FLOAT" << "Max absolute Wilcoxon rank sum test Z-score of alt vs. ref read map quality [" << mqRankSum << "]\n"
+	<< std::setw(w1) << std::left << "-posbias" << std::setw(w2) << std::left << "FLOAT" << "Max absolute Wilcoxon rank sum test Z-score of alt vs. ref read position bias [" << posbias << "]\n"
+	<< std::setw(w1) << std::left << "-strandbias" << std::setw(w2) << std::left << "FLOAT" << "Max Phred-scaled Fisher's exact test p-value of strand bias [" << strandbias << "]\n"
+	<< std::setw(w1) << std::left << "-baseqbias" << std::setw(w2) << std::left << "FLOAT" << "Max absolute Wilcoxon rank sum test Z-score of alt vs ref base qualities [" << baseqbias << "]\n"
+	<< std::setw(w1) << std::left << "-qual" << std::setw(w2) << std::left << "FLOAT" << "Min Phred-scaled quality score of ALT assertion [" << qual << "]\n"
+	<< std::setw(w1) << std::left << "-varq_depth" << std::setw(w2) << std::left << "FLOAT" << "Min variant Phred-scaled confidence/quality by depth [" << varqual_depth << "]\n"
+	<< std::setw(w1) << std::left << "-hetexcess" << std::setw(w2) << std::left << "FLOAT" << "Max Phred-scaled p-value for exact test of excess heterozygosity [" << hetexcess << "]\n"
+	<< std::setw(w1) << std::left << "-rmvIndels" << std::setw(w2) << std::left << "" << "Discard indels (still count towards multiallelic sites)\n"
+	<< std::setw(w1) << std::left << "-varonly" << std::setw(w2) << std::left << "" << "The INFO AF for SNP-only output VCF must be in range (0,1) (as opposed to [0,1])\n"
 	<< std::setw(w1) << std::left << "-maf" << std::setw(w2) << std::left << "FLOAT" << "Minor allele frequency lower bound for SNP-only VCF [" << maf << "]\n"
 	<< std::setw(w1) << std::left << "-verbose" << std::setw(w2) << std::left << "0|1|2" << "Level of warnings to issue: 0 = suppress all, 1 = site-level, 2 = individual-level [" << verbose << "]\n"
-	<< "\nOther site QC fail flags:\n"
-	<< "F, Unkown reference allele\n"
-	<< "N, No data for any individuals\n"
 	<< "\n";
 }
 
@@ -98,8 +97,8 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 	int rv = 0;
 
 	// filtering parameters
-	int biallelic = 1; // 0: keep multiallelic sites, 1: keep only biallelic sites
-	int allsites = 0; // 0: process only SNPs, 1: process all sites (except indels)
+	int biallelic = 0; // 0: keep multiallelic sites, 1: keep only biallelic sites
+	int allsites = 0; // 0: process only SNPs, 1: process all sites
 	int allsites_vcf = 0; // output VCF contains QC-passed 0: SNPs only or 1: all sites
 	unsigned int maxcov = 1000000; // maximum total site coverage (DP)
 	unsigned int mincov = 2; // minimum total site coverage (DP)
@@ -114,14 +113,17 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 	double varqual_depth = 2.0; // min variant Phred-scaled confidence/quality by depth (QD)
 	double qual = 30; // min Phred-scaled quality score of ALT assertion (QUAL field)
 	double hetexcess = 40.0; // max Phred-scaled p-value for exact test of excess heterozygosity (ExcessHet)
-	int varonly = 1; // The INFO for SNP-only VCF must have AF in 1=range (0,1), or 0=range [0,1]
+	int varonly = 0; // The INFO for SNP-only VCF must have AF in 1=range (0,1), or 0=range [0,1]
 	double mafcutoff = 0.0; // minor allele frequency lower bound for SNP-only VCF
 	int verbose = 2; // amount of warnings outputted, 0=none, 1=site level, 2=individual level
 	int infmt = 0; // 0=uncompressed vcf, 1=gzipped input, 2=uncompressed standard input
-	int rmvIndels = 1; // 0 = process indels, 1 = discard sites with indels (indels still count towards identifying multiallelic sites)
+	int rmvIndels = 0; // 0 = process indels, 1 = discard sites with indels (indels still count towards identifying multiallelic sites)
+	int siteOnly = 0; // 0 = individual information is printed, 1 = Do not print individual info to VCF
+	int printFilter = 0; // 0 = sites that fail QC are not printed to VCF, 1 = overwrite FILTER field info with failed filters, 2 = append failed filters to INFO field
 
 	if ((rv=parseGATKargs(argc, argv, invcf, outvcf, passpos, failpos, biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov,
-			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, mafcutoff, rmvIndels, verbose, infmt))) {
+			minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, mafcutoff,
+			rmvIndels, siteOnly, printFilter, verbose, infmt))) {
 		if (rv > 0)
 			return 0;
 		else if (rv < 0)
@@ -147,11 +149,13 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 	std::istream instream(inbuf);
 
 	// process VCF file
+	vcfrecord vcftoke1; // vcf entry for odd lines
+	vcfrecord vcftoke2; // vcf entry for even lines
+	vcfrecord* vcfptr = &vcftoke1;
+	vcfrecord* prev = NULL;
 	std::string vcfline;
-	std::vector<std::string> vcfvec;
-	std::vector<std::string>::iterator iter;
 
-	// print headers and set up vector to hold tokens
+	// print headers and set number of vcf fields
 	while (getline(instream, vcfline)) {
 		outvcf << vcfline << "\n";
 		if (vcfline[0] != '#' || vcfline[1] != '#')
@@ -161,10 +165,11 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 	std::stringstream ss(vcfline);
 	std::string tok;
 	while (ss >> tok) {
-		vcfvec.push_back("");
+		vcftoke1.fields.push_back("");
 	}
-	vcfvec.resize(vcfvec.size());
-	unsigned int nind = vcfvec.size()-9;
+	vcftoke1.fields.resize(vcftoke1.fields.size());
+	vcftoke2.fields.resize(vcftoke1.fields.size());
+	unsigned int nind = vcftoke1.fields.size()-9;
 
 	std::cerr << "Number individuals in VCF: " << nind << "\n\n";
 
@@ -175,166 +180,122 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 	 * Q=QUAL, H=excess heterozygosity, F=Unknown reference allele, G=min number of genotyped individuals
 	*/
 
-	int infosize = 20; // can dynamically set this
-	std::vector<std::string> infovec;
-	infovec.resize(infosize);
+	unsigned int nflags = 17;
+	vcftoke1.flags.resize(nflags);
+	vcftoke2.flags.resize(nflags);
 
-	std::stringstream infostream;
-	std::string contig = "";
+	region keep; // good sites (stores info to get printed to region file)
 
-	std::string badflags;
-	badflags.reserve(16);
-	region keep; // good sites
-	vcfrecord vcfinfo(badflags.capacity()); // vcf entry
-	std::pair <std::string,unsigned int> prev ("",0);
-
-	int i=0;
 	size_t indcounts [2]; // 0=number genotyped individuals, 1=number of individuals with min coverage
-
-	unsigned int pos = 0;
-	double maf = 0.0;
 	int isMultiAllelic = 0;
 	int isIndel = 0;
+	unsigned int nlines = 0; // number of lines processed
 
 	while (getline(instream, vcfline)) {
 	// assume vcf fields are [0]=CHROM, [1]=POS, [2]=ID, [3]=REF, [4]=ALT, [5]=QUAL, [6]=FILTER, [7]=INFO, [8]=FORMAT
+		++nlines;
+		if (nlines % 2 == 0) {
+			// processing even line
+			vcfptr = &vcftoke2;
+		} else {
+			// processing odd line
+			vcfptr = &vcftoke1;
+		}
 
 		// fill up site information vector
 		ss.clear();
 		ss.str(vcfline);
-		iter=vcfvec.begin();
+		std::vector<std::string>::iterator iter=vcfptr->fields.begin();
 		while (ss >> *iter) {
 			++iter;
 		}
-		if (iter < vcfvec.end()) {
-			std::cerr << "Input VCF appears truncated\n";
+		if (iter < vcfptr->fields.end()) {
+			std::cerr << "Input VCF line " << nlines << " appears truncated\n";
 			return -1;
 		}
+		vcfptr->setSite();
+		vcfptr->clearFlags();
 
 		// process site
-		badflags.clear();
-		pos = atoi(vcfvec[1].c_str());
 
-		if (vcfvec[7] == ".") {
+		if (vcfptr->fields[7] == ".") {
 			// check for completely missing data
-			badflags.push_back('N');
-		} else if ( vcfvec[3].size() == 1 && (vcfvec[3]=="A" || vcfvec[3]=="C" || vcfvec[3]=="G" || vcfvec[3]=="T" || vcfvec[3]=="N") == 0 ) {
+			vcfptr->setFlag(0);
+		} else if ( vcfptr->ref.size() == 1 && (vcfptr->ref=="A" || vcfptr->ref=="C" || vcfptr->ref=="G" || vcfptr->ref=="T" || vcfptr->ref=="N") == 0 ) {
 			// check for unknown reference allele
-			badflags.push_back('F');
+			vcfptr->setFlag(1);
 		} else  {
-			if (allsites || vcfvec[4] != ".") {
-				siteType(vcfvec, &isMultiAllelic, &isIndel);
+			if (allsites || vcfptr->alt != ".") {
+				siteType(vcfptr->fields, &isMultiAllelic, &isIndel);
 
 				// check for multiallelic sites
 				if (biallelic && isMultiAllelic) {
-					badflags.push_back('A');
+					vcfptr->setFlag(2);
 				}
 
 				// check for indels
 				if (rmvIndels && isIndel) {
-					badflags.push_back('I');
+					vcfptr->setFlag(3);
 				}
 
 				// check QUAL
-				if (atoi(vcfvec[5].c_str()) < qual) {
-					badflags.push_back('Q');
+				if (atoi(vcfptr->fields[5].c_str()) < qual) {
+					vcfptr->setFlag(4);
 				}
 
 				if (parseIndividuals) {
 					// extract individual information
-					if (extractIndInfo(vcfvec, indcounts, minind_cov, verbose)) {
+					if (extractIndInfo(vcfptr->fields, indcounts, minind_cov, verbose)) {
 						return -1;
 					}
 
 					// check number of genotyped individuals
 					//std::cerr << indcounts[0] << "\n"; //debug
-					if (indcounts[0] < mingeno) badflags.push_back('G');
+					if (indcounts[0] < mingeno) vcfptr->setFlag(8);
 
 					// check number of individuals with data
 					//std::cerr << indcounts[1] << "\n"; //debug
-					if (indcounts[1] < minind) badflags.push_back('U');
+					if (indcounts[1] < minind) vcfptr->setFlag(7);
 				}
 
 				// examine INFO field
-				infostream.clear();
-				infostream.str(vcfvec[7]);
-				i=0;
-
-				while (std::getline(infostream, infovec[i], ';')) {
-					++i;
-				}
-
-				checkGatkInfo(infovec, i, &badflags, mincov, maxcov, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, varqual_depth, hetexcess);
+				checkGatkInfo(vcfptr, mincov, maxcov, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, varqual_depth, hetexcess);
 
 				// get allele frequency info for potential snp
-				if (vcfvec[4] != ".") {
-					maf = getMaf(vcfvec, verbose);
+				if (vcfptr->alt != ".") {
+					vcfptr->af = getMaf(vcfptr->fields, verbose);
 				} else {
-					maf = 0.0;
+					vcfptr->af = 0.0;
 				}
 			}
 
 		}
 
-		if (!vcfinfo.entry.empty()) {
-
+		// write output
+		if (prev) {
 			// check for multiple entries of position
-			if ((vcfinfo.pos == pos && vcfinfo.contig == vcfvec[0]) || (vcfinfo.pos == prev.second && vcfinfo.contig == prev.first)) {
-				if (biallelic) vcfinfo.flags.push_back('A');
+			if (vcfptr->pos == prev->pos && vcfptr->contig == prev->contig) {
+				if (biallelic) prev->setFlag(2);
 			}
 
-			if (vcfinfo.flags.empty()) {
-				// update good sites
-				if(!updateRegion(vcfinfo, keep, passpos)) {
-					return -1;
-				}
-
-				// output to VCF
-				if (allsites_vcf) {
-					// print site whether it's variable or not
-					outvcf << vcfinfo.entry << "\n";
-				} else if ( vcfinfo.alt != '.') {
-					// potential snp
-					if (!varonly || (varonly && vcfinfo.af > mafcutoff)) {
-						outvcf << vcfinfo.entry << "\n";
-					}
-				}
-
-			} else {
-				// process sites that failed QC
-				if (!writeBads(vcfinfo.flags, vcfinfo.contig, &vcfinfo.pos, failpos)) {
-					return -1;
-				}
+			if(recordSite (prev, keep, outvcf, passpos, failpos, allsites_vcf, printFilter, siteOnly, varonly, mafcutoff, allsites)) {
+				return -1;
 			}
+
 		}
 
-		prev.first = vcfinfo.contig;
-		prev.second = vcfinfo.pos;
-		vcfinfo.newEntry(&vcfline, &vcfvec[0], &pos, (vcfvec[4].c_str())[0], maf, &badflags);
+		prev = vcfptr;
+	}
+
+	// check for multiple entries of last position
+	if (vcfptr->pos == prev->pos && vcfptr->contig == prev->contig) {
+		if (biallelic) vcfptr->setFlag(2);
 	}
 
 	// write last staged sites
-	if (vcfinfo.flags.empty()) {
-		if (!updateRegion(vcfinfo, keep, passpos)) {
-			return -1;
-		}
-
-		if (allsites_vcf) {
-			// print site whether it's variable or not
-			outvcf << vcfinfo.entry << "\n";
-		} else if ( vcfinfo.alt != '.') {
-			// potential snp
-			if (!varonly || (varonly && vcfinfo.af > mafcutoff)) {
-				outvcf << vcfinfo.entry << "\n";
-			}
-		}
-
-	} else {
-		if (!writeBads(vcfinfo.flags, vcfinfo.contig, &vcfinfo.pos, failpos)) {
-			return -1;
-		}
+	if(recordSite (vcfptr, keep, outvcf, passpos, failpos, allsites_vcf, printFilter, siteOnly, varonly, mafcutoff, allsites)) {
+		return -1;
 	}
-
 
 	if (keep.entries > 0) {
 		if (!keep.write(passpos)) {
@@ -345,6 +306,88 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 	std::cerr << "Finished processing VCF\n";
 
 	return rv;
+}
+
+int recordSite (vcfrecord* site, region &keep, std::ofstream &vcfstream, std::ofstream &goodstream, std::ofstream &failstream,
+		const int &allsites_vcf, const int &printFilter, const int &siteOnly, const int &varonly, const double &mafcutoff, const int &allsites) {
+	// update passed and failed sites output
+	if (allsites || (site->alt != "." && (!varonly || (varonly && site->af > mafcutoff)))) {
+		if (site->qcfail == 0) {
+			// update good sites
+			if (!updateRegion(site, keep, goodstream)) {
+				return -1;
+			}
+		} else if (!printFilter) {
+			// write site that fails QC (only needed if annotating VCF FILTERS field)
+			if (!writeBads(site, failstream)) {
+				return -1;
+			}
+		}
+	}
+
+	// write to output VCF
+	if (allsites_vcf) {
+		// output all sites VCF
+		if (printFilter) {
+			// write VCF with FILTER annotation
+			writeVcf(site, vcfstream, siteOnly, printFilter);
+		} else if (site->qcfail == 0) {
+			// write VCF only for sites that pass all filters
+			writeVcf(site, vcfstream, siteOnly, printFilter);
+		}
+	} else if (site->alt != ".") {
+		// output variant VCF
+		if (!varonly || (varonly && site->af > mafcutoff) ) {
+			// check whether MAF condition is met
+			if (printFilter) {
+				// variant VCF with FILTER annotation
+				writeVcf(site, vcfstream, siteOnly, printFilter);
+			} else if (site->qcfail == 0) {
+				// write only variants sites that pass filters
+				writeVcf(site, vcfstream, siteOnly, printFilter);
+			}
+		}
+	}
+
+	return 0;
+}
+
+void writeVcf (vcfrecord* vcfrec, std::ofstream &os, const int &siteOnly, const int &printFilter) {
+	unsigned int i = 0;
+	static std::vector< std::pair<std::string,int> >::iterator it;
+	for (i = 0; i<6; ++i) os << vcfrec->fields[i] << "\t";
+
+	// print FILTER field
+	if (vcfrec->qcfail == 0 && vcfrec->fields[6] == ".") {
+		os << "PASS\t";
+	} else {
+		if (printFilter == 2 && vcfrec->fields[6] != ".") os << vcfrec->fields[6] << ",";
+		int j = 0;
+		for (it = vcfrec->flags.begin(); it != vcfrec->flags.end(); ++it) {
+			if (it->second) {
+				os << it->first;
+				++j;
+				if (j < vcfrec->qcfail) {
+					os << ",";
+				} else {
+					os << "\t";
+					break;
+				}
+			}
+		}
+	}
+
+	// print INFO
+	os << vcfrec->fields[7];
+
+	// print individual genotype information
+	if (!siteOnly) {
+		for (i = 8; i < vcfrec->fields.size(); ++i) {
+			os << "\t" << vcfrec->fields[i];
+		}
+	}
+
+	os << "\n";
 }
 
 double getMaf (const std::vector<std::string> &vcfvec, int verbose) {
@@ -420,18 +463,18 @@ void siteType (std::vector<std::string> & vcfvec, int* isMultiAllelic, int* isIn
 	}
 }
 
-region* updateRegion (vcfrecord &site, region& goodpos, std::ofstream& outstream) {
+region* updateRegion (vcfrecord* site, region& goodpos, std::ofstream& outstream) {
 	if (goodpos.start == 0) {
-		goodpos.makeNew(site.contig, site.pos);
-	} else if (site.pos - goodpos.end == 1) {
+		goodpos.makeNew(site->contig, site->pos);
+	} else if (site->pos - goodpos.end == 1) {
 		++goodpos.end;
-	} else if (site.pos == goodpos.end && site.contig == goodpos.contig) {
+	} else if (site->pos == goodpos.end && site->contig == goodpos.contig) {
 		++goodpos.entries;
-	} else if (site.pos - goodpos.end > 1 || site.contig != goodpos.contig) {
+	} else if (site->pos - goodpos.end > 1 || site->contig != goodpos.contig) {
 			if(!goodpos.write(outstream)) {
 				return NULL;
 		}
-		goodpos.makeNew(site.contig, site.pos);
+		goodpos.makeNew(site->contig, site->pos);
 	} else {
 		std::cerr << "Positions in VCF do not appear to be in increasing order\n";
 		return NULL;
@@ -440,14 +483,29 @@ region* updateRegion (vcfrecord &site, region& goodpos, std::ofstream& outstream
 	return &goodpos;
 }
 
-std::ofstream* writeBads (std::string& flags, std::string &contig, const unsigned int* pos, std::ofstream& outstream) {
+std::ofstream* writeBads (vcfrecord* vcfrec, std::ofstream& outstream) {
 	if (!outstream.is_open()) {
 		std::cerr << "Unable to write qc-failed site information to unopened outstream\n";
 		return NULL;
 	}
 
-	//std::cerr << contig << "\t" << *pos << "\t" << flags << "\n"; //debug
-	outstream << contig << "\t" << *pos << "\t" << flags << "\n";
+	outstream << vcfrec->contig << "\t" << vcfrec->pos << "\t";
+
+	// print FILTER field
+	static std::vector< std::pair<std::string,int> >::iterator it;
+	int j = 0;
+	for (it = vcfrec->flags.begin(); it != vcfrec->flags.end(); ++it) {
+		if (it->second) {
+			outstream << it->first;
+			++j;
+			if (j < vcfrec->qcfail) {
+				outstream << ",";
+			} else {
+				outstream << "\n";
+				break;
+			}
+		}
+	}
 
 	return &outstream;
 }
@@ -595,9 +653,22 @@ int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigne
 	return rv;
 }
 
-void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, const unsigned int &mincov, const unsigned int &maxcov,
+void checkGatkInfo(vcfrecord* vcfrec, const unsigned int &mincov, const unsigned int &maxcov,
 		const double &rms_mapq, const double &mqRankSum, const double &posbias, const double &strandbias, const double &baseqbias,
 		const double & varqual_depth, const double &hetexcess) {
+
+	const int infosize = 20; // can dynamically set this
+	static std::vector<std::string> info; // stores tokenized VCF INFO subfields
+	if (info.size() == 0) info.resize(infosize);
+
+	static std::stringstream infostream;
+	infostream.clear();
+	infostream.str(vcfrec->fields[7]);
+
+	int n = 0;
+	while (std::getline(infostream, info[n], ';')) {
+		++n;
+	}
 
 	static char id [20];
 	static char val [40];
@@ -624,36 +695,36 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 		absv = fabs(v);
 
 		if (strcmp(id, "DP") == 0) {
-			if (v < mincov) flags->push_back('C');
-			if (v > maxcov) flags->push_back('D');
+			if (v < mincov) vcfrec->setFlag(5);
+			if (v > maxcov) vcfrec->setFlag(6);
 		}
 
 		else if (strcmp(id, "MQ") == 0 && v < rms_mapq) {
-			flags->push_back('R');
+			vcfrec->setFlag(9);
 		}
 
 		else if (strcmp(id, "MQRankSum") == 0 && absv > mqRankSum) {
-			flags->push_back('M');
+			vcfrec->setFlag(10);
 		}
 
 		else if (strcmp(id, "ReadPosRankSum") == 0 && absv > posbias) {
-			flags->push_back('P');
+			vcfrec->setFlag(11);
 		}
 
 		else if (strcmp(id, "FS") == 0 && v > strandbias) {
-			flags->push_back('S');
+			vcfrec->setFlag(12);
 		}
 
 		else if (strcmp(id, "BaseQRankSum") == 0 && absv > baseqbias) {
-			flags->push_back('B');
+			vcfrec->setFlag(13);
 		}
 
 		else if (strcmp(id, "QD") == 0 && v < varqual_depth) {
-			flags->push_back('V');
+			vcfrec->setFlag(14);
 		}
 
 		else if (strcmp(id, "ExcessHet") == 0 && v > hetexcess) {
-			flags->push_back('H');
+			vcfrec->setFlag(15);
 		}
 
 	}
@@ -662,13 +733,13 @@ void checkGatkInfo(std::vector<std::string> &info, int n, std::string* flags, co
 int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf, std::ofstream &passpos, std::ofstream &failpos,
 	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
 	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double& qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels, int &verbose, int &infmt) {
+	double& qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels, int &siteOnly, int &printFilter, int &verbose, int &infmt) {
 
 	int rv = 0;
 
 	if (argc < 6) {
 		gatkinfo(biallelic, allsites, allsites_vcf, maxcov, mincov, minind_cov, minind, mingeno, rms_mapq, mqRankSum,
-				posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, maf, rmvIndels, verbose);
+				posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess, varonly, maf, rmvIndels, siteOnly, printFilter, verbose);
 		return 1;
 	}
 
@@ -677,6 +748,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 	std::string outvcf_name;
 	std::string goodpos_name;
 	std::string badpos_name;
+	std::string outprefix;
 
 	while (argpos < argc) {
 		if (strcmp(argv[argpos], "-vcf") == 0) {
@@ -696,10 +768,11 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				infmt = (magic[0] == 0x1f && magic[1] == 0x8b) ? 1 : 0;
 				invcf.seekg(0, std::ios_base::beg);
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-out") == 0) {
-			std::string outprefix(argv[argpos+1]);
+			outprefix = argv[argpos+1];
 			// output VCF
 			outvcf_name = outprefix + ".vcf";
 			outvcf.open(outvcf_name.c_str(), std::ios::out);
@@ -714,56 +787,22 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "Unable to open QC-passed position file " << goodpos_name << "\n";
 				return -1;
 			}
-			// output QC failed positions
-			badpos_name = outprefix + "_fail.pos";
-			failpos.open(badpos_name.c_str(), std::ios::out);
-			if (! failpos) {
-				std::cerr << "Unable to open QC-failed position file " << badpos_name << "\n";
-				return -1;
-			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos],"-biallelic") == 0) {
 			// biallelic SNP filter
-			biallelic = atoi(argv[argpos+1]);
-			switch (biallelic) {
-				case 0:
-					break;
-				case 1:
-					break;
-				default:
-					std::cerr << "-biallelic must be 0 to keep all SNPs or 1 to keep only biallelic SNPs\n";
-					return -1;
-			}
+			biallelic = 1;
 		}
 
 		else if (strcmp(argv[argpos], "-allsites") == 0) {
 			// process all input sites
-			allsites = atoi(argv[argpos+1]);
-			switch (allsites) {
-				case 0:
-					break;
-				case 1:
-					break;
-				default:
-					std::cerr << "-allsites must be 0 to process only SNPs or 1 to process all sites\n";
-					return -1;
-			}
-
+			allsites = 1;
 		}
 
 		else if (strcmp(argv[argpos], "-allsites_vcf") == 0) {
 			// output vcf type
-			allsites_vcf = atoi(argv[argpos+1]);
-			switch (allsites_vcf) {
-				case 0:
-					break;
-				case 1:
-					break;
-				default:
-					std::cerr << "-allsites_vcf must be 0 to have the output VCF contain SNPs only or 1 to contain all sites\n";
-					return -1;
-			}
+			allsites_vcf = 1;
 		}
 
 		else if (strcmp(argv[argpos], "-maxcov") == 0) {
@@ -773,6 +812,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-maxcov must be > 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-mincov") == 0) {
@@ -782,6 +822,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-mincov must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-minind_cov") == 0) {
@@ -791,6 +832,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-minind_cov must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos],"-minind") == 0) {
@@ -800,6 +842,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-minind must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos],"-mingeno") == 0) {
@@ -809,6 +852,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-mingeno must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-rms_mapq") == 0) {
@@ -818,6 +862,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-rms_mapq must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos],"-mapqRankSum") == 0) {
@@ -827,6 +872,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-mapqRankSum must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-posbias") == 0) {
@@ -836,6 +882,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-posbias must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-strandbias") == 0) {
@@ -845,6 +892,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-strandbias must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-baseqbias") == 0) {
@@ -854,6 +902,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-baseqbias must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-qual") == 0) {
@@ -863,6 +912,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-qual must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-varq_depth") == 0) {
@@ -872,6 +922,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-varq_depth must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos],"-hetexcess") == 0) {
@@ -881,20 +932,12 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-hetexcess must be >= 0\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-varonly") == 0) {
 			// AF criteria for outputting variable sites
-			varonly = atoi(argv[argpos+1]);
-			switch (varonly) {
-				case 0 :
-					break;
-				case 1 :
-					break;
-				default:
-					std::cerr << "Invalid -varonly value, (should be 0 or 1)\n";
-					return -1;
-			}
+			varonly = 1;
 		}
 
 		else if (strcmp(argv[argpos], "-maf") == 0) {
@@ -904,20 +947,34 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 				std::cerr << "-maf out of [0, 0.5] range\n";
 				return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-rmvIndels") == 0) {
 			// decide whether to discard sites with indels
-			rmvIndels = atoi(argv[argpos+1]);
-			switch (rmvIndels) {
-				case 0 :
+			rmvIndels = 1;
+		}
+
+		else if (strcmp(argv[argpos], "-siteOnly") == 0) {
+			// whether to print individual-level information
+			siteOnly = 1;
+		}
+
+		else if (strcmp(argv[argpos], "-printFilter") == 0) {
+			// whether to filter out QC-failed sites or annotate them in the FILTER field
+			printFilter = atoi(argv[argpos+1]);
+			switch (printFilter) {
+				case 0:
 					break;
-				case 1	:
+				case 1:
 					break;
-				default	:
-					std::cerr << "-rmvIndels must be 0 (process indels) or 1 (discard indels)\n";
+				case 2:
+					break;
+				default:
+					std::cerr << "Invalid argument to -printFilter: " << printFilter << "\n";
 					return -1;
 			}
+			++argpos;
 		}
 
 		else if (strcmp(argv[argpos], "-verbose") == 0) {
@@ -934,6 +991,7 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 					std::cerr << "Invalid -verbose level (should be 0, 1, or 2)\n";
 					return -1;
 			}
+			++argpos;
 		}
 
 		else {
@@ -941,7 +999,17 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 			return -1;
 		}
 
-		argpos += 2;
+		++argpos;
+	}
+
+	// output QC failed positions
+	if (!printFilter) {
+		badpos_name = outprefix + "_fail.pos";
+		failpos.open(badpos_name.c_str(), std::ios::out);
+		if (! failpos) {
+			std::cerr << "Unable to open QC-failed position file " << badpos_name << "\n";
+			return -1;
+		}
 	}
 
 	if (!allsites && allsites_vcf) {
@@ -950,41 +1018,57 @@ int parseGATKargs (int argc, char** argv, std::ifstream &invcf, std::ofstream &o
 
 	printUserArgs(invcf_name, outvcf_name, goodpos_name, badpos_name, biallelic, allsites, allsites_vcf, maxcov,
 			mincov, minind_cov, minind, mingeno, rms_mapq, mqRankSum, posbias, strandbias, baseqbias, qual, varqual_depth, hetexcess,
-			varonly, maf, rmvIndels);
+			varonly, maf, rmvIndels, siteOnly, printFilter);
 
 	return rv;
 }
 
 void printUserArgs (const char* invcf_name, std::string &outvcf_name, std::string &goodpos_name, std::string &badpos_name,
-	int &biallelic, int &allsites, int &allsites_vcf, unsigned int &maxcov, unsigned int &mincov, unsigned int &minind_cov,
-	unsigned int &minind, unsigned int &mingeno, double &rms_mapq, double &mqRankSum, double &posbias, double &strandbias, double &baseqbias,
-	double &qual, double &varqual_depth, double &hetexcess, int &varonly, double &maf, int &rmvIndels) {
+	int biallelic, int allsites, int allsites_vcf, unsigned int maxcov, unsigned int mincov, unsigned int minind_cov,
+	unsigned int minind, unsigned int mingeno, double rms_mapq, double mqRankSum, double posbias, double strandbias, double baseqbias,
+	double qual, double varqual_depth, double hetexcess, int varonly, double maf, int rmvIndels, int siteOnly, int printFilter) {
 
 	int w=20;
 	std::cerr << "\n"
 	<< std::setw(w) << std::left << "Reading VCF: " << invcf_name << "\n"
 	<< std::setw(w) << std::left << "Filtered VCF: " << outvcf_name << "\n"
-	<< std::setw(w) << std::left << "Passed positions: " << goodpos_name << "\n"
-	<< std::setw(w) << std::left << "Failed positions: " << badpos_name << "\n"
-	<< std::setw(w) << std::left << "allsites: " << allsites << "\n"
-	<< std::setw(w) << std::left << "allsites_vcf: " << allsites_vcf << "\n"
-	<< std::setw(w) << std::left << "biallelic: " << biallelic << "\n"
-	<< std::setw(w) << std::left << "maxcov: " << maxcov << "\n"
-	<< std::setw(w) << std::left << "mincov: " << mincov << "\n"
-	<< std::setw(w) << std::left << "minind_cov: " << minind_cov << "\n"
-	<< std::setw(w) << std::left << "minind: " << minind << "\n"
-	<< std::setw(w) << std::left << "mingeno: " << mingeno << "\n"
-	<< std::setw(w) << std::left << "rms_mapq: " << rms_mapq << "\n"
-	<< std::setw(w) << std::left << "mapqRankSum: " << mqRankSum << "\n"
-	<< std::setw(w) << std::left << "posbias: " << posbias << "\n"
-	<< std::setw(w) << std::left << "strandbias: "  << strandbias << "\n"
-	<< std::setw(w) << std::left << "baseqbias: " << baseqbias << "\n"
-	<< std::setw(w) << std::left << "qual: " << qual << "\n"
-	<< std::setw(w) << std::left << "varq_depth: " << varqual_depth << "\n"
-	<< std::setw(w) << std::left << "hetexcess: " << hetexcess << "\n"
-	<< std::setw(w) << std::left << "varonly: " << varonly << "\n"
-	<< std::setw(w) << std::left << "maf: " << maf << "\n"
-	<< std::setw(w) << std::left << "rmvIndels: " << rmvIndels << "\n"
+	<< std::setw(w) << std::left << "Passed positions: " << goodpos_name << "\n";
+	if (!printFilter) {
+		std::cerr << std::setw(w) << std::left << "Failed positions: " << badpos_name << "\n";
+	}
+	if (allsites) {
+		std::cerr << "-allsites\n";
+	}
+	if (allsites_vcf) {
+		std::cerr << "-allsites_vcf\n";
+	}
+	if (siteOnly) {
+		std::cerr << "-siteOnly\n";
+	}
+	std::cerr << std::setw(w) << std::left << "-printFilter: " << printFilter << "\n";
+	if (biallelic) {
+		std::cerr << "-biallelic\n";
+	}
+	if (varonly) {
+		std::cerr << "-varonly\n";
+	}
+	if (rmvIndels) {
+		std::cerr << "-rmvIndels\n";
+	}
+	std::cerr << std::setw(w) << std::left << "-maxcov: " << maxcov << "\n"
+	<< std::setw(w) << std::left << "-mincov: " << mincov << "\n"
+	<< std::setw(w) << std::left << "-minind_cov: " << minind_cov << "\n"
+	<< std::setw(w) << std::left << "-minind: " << minind << "\n"
+	<< std::setw(w) << std::left << "-mingeno: " << mingeno << "\n"
+	<< std::setw(w) << std::left << "-rms_mapq: " << rms_mapq << "\n"
+	<< std::setw(w) << std::left << "-mapqRankSum: " << mqRankSum << "\n"
+	<< std::setw(w) << std::left << "-posbias: " << posbias << "\n"
+	<< std::setw(w) << std::left << "-strandbias: "  << strandbias << "\n"
+	<< std::setw(w) << std::left << "-baseqbias: " << baseqbias << "\n"
+	<< std::setw(w) << std::left << "-qual: " << qual << "\n"
+	<< std::setw(w) << std::left << "-varq_depth: " << varqual_depth << "\n"
+	<< std::setw(w) << std::left << "-hetexcess: " << hetexcess << "\n"
+	<< std::setw(w) << std::left << "-maf: " << maf << "\n"
 	<< "\n";
 }
 
@@ -1019,27 +1103,61 @@ std::ofstream* region::write (std::ofstream& outstream) {
 	return &outstream;
 }
 
-vcfrecord::vcfrecord (size_t flagcapacity)
-	: entry(""),
-	  flags(""),
-	  contig(""),
+vcfrecord::vcfrecord ()
+	: contig(""),
 	  pos(0),
-	  alt('\0'),
-	  af(0)
+	  ref(""),
+	  alt(""),
+	  af(0),
+	  qcfail(0)
 {
-	flags.reserve(flagcapacity);
+	flags.resize(16);
+	flags[0].first = "Missing";
+	flags[1].first = "UknownRef";
+	flags[2].first = "MultiAllele";
+	flags[3].first = "Indel";
+	flags[4].first = "LowQual";
+	flags[5].first = "LowDP";
+	flags[6].first = "HighDP";
+	flags[7].first = "LowIndDP";
+	flags[8].first = "LowGeno";
+	flags[9].first = "LowMQ";
+	flags[10].first = "MapQualBias";
+	flags[11].first = "PosBias";
+	flags[12].first = "FS";
+	flags[13].first = "BaseQualBias";
+	flags[14].first = "LowQD";
+	flags[15].first = "ExcessHet";
+
 }
 
-void vcfrecord::newEntry (std::string* vcfline, std::string* id, unsigned int* position,
-		char altallele, double allelef, std::string* f) {
-	entry = *vcfline;
-	contig = *id;
-	pos = *position;
-	alt = altallele;
-	af = allelef;
-	if (f) {
-		flags = *f;
-	} else {
-		flags.clear();
+void vcfrecord::reserveFields (unsigned int nfields) {
+	fields.reserve(nfields);
+}
+
+void vcfrecord::reserveFlags (unsigned int nflags) {
+	flags.reserve(nflags);
+}
+
+void vcfrecord::clearFlags () {
+	static std::vector< std::pair<std::string,int> >::iterator it;
+	for (it = flags.begin(); it != flags.end(); ++it) {
+		it->second = 0;
+	}
+	qcfail = 0;
+}
+
+void vcfrecord::setSite () {
+	contig = fields[0];
+	pos = atoi(fields[1].c_str());
+	ref = fields[3];
+	alt = fields[4];
+}
+
+
+void vcfrecord::setFlag (int i) {
+	if (flags[i].second == 0) {
+		flags[i].second = 1;
+		++qcfail;
 	}
 }
