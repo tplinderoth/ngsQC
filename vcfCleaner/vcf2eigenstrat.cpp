@@ -266,7 +266,7 @@ int vcf2Snp (std::istream& vcf, std::ifstream& ratefile, double rate) {
 		int i = 0;
 
 		// extract and print info
-		while (ss >> vcftok[i] && i < nfields) ++i;
+		while (i < nfields && ss >> vcftok[i]) ++i;
 		std::string snp = vcftok[0] + '_' + vcftok[1];
 		std::string chr = vcftok[0].substr(3, vcftok[0].size());
 		if  (!ratemap.empty()) {
