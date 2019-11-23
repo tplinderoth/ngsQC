@@ -21,11 +21,13 @@ void maininfo () {
 	<< "\n";
 }
 
-void makeGenoInfo () {
-	std::cerr << "\nvcf2eigenstrat makeGeno <vcf file | '-' for VCF from STDIN>\n\n"
+void makeGenoInfo (const int genotype) {
+	std::cerr << "\nvcf2eigenstrat makeGeno [options] <vcf file | '-' for VCF from STDIN>\n\n"
 	<< "Output: each row is a SNP that contains either two columns per individual corresponding\n"
 	<< "to the 1st and 2nd phased haplotype allele respectively if phased or one column per individual\n"
 	<< "corresponding to the (0,1,2,9) genotype if unphased.\n"
+	<< "\nOptions:\n"
+	<< "--genotype [0|1]: If providing phased VCF, --genotype 1 will output unphased genotypes as 0,1,2,9 [" << genotype << "]\n"
 	<< "\n";
 }
 
@@ -45,7 +47,7 @@ void makeSnpInfo () {
 	<< "\n";
 }
 
-int parseArgs (int argc, char** argv, std::istream& vcf, std::ifstream& vcffile, std::ifstream& ratefile, double& rate) {
+int parseArgs (int argc, char** argv, std::istream& vcf, std::ifstream& vcffile, std::ifstream& ratefile, double& rate, int& genostyle) {
 
 	int rv = 0;
 
@@ -72,11 +74,32 @@ int parseArgs (int argc, char** argv, std::istream& vcf, std::ifstream& vcffile,
 	int i = 2;
 	if (strcmp(argv[1],"makeGeno") == 0) {
 		if (argc < 3) {
-			makeGenoInfo();
+			makeGenoInfo(genostyle);
 			rv = 0;
 			return rv;
 		}
 		rv = 1;
+		while (i < argc-1) {
+			if (strcmp(argv[i],"--genotype") == 0) {
+				genostyle = atoi(argv[i+1]);
+				switch (genostyle) {
+					case 0 :
+						break;
+					case 1 :
+						break;
+					default :
+						std::cerr << "--genotype must be either 1 for unphased genotype or 0 for phased genotype\n";
+						rv = -1;
+						break;
+				}
+				if (rv == -1) break;
+			} else {
+				std::cerr << "Unknown argument " << argv[i] << "\n";
+				rv = -1;
+				break;
+			}
+			i += 2;
+		}
 	} else if (strcmp(argv[1],"makeSnp") == 0) {
 		if (argc < 5) {
 			makeSnpInfo();
@@ -101,7 +124,7 @@ int parseArgs (int argc, char** argv, std::istream& vcf, std::ifstream& vcffile,
 				}
 			} else {
 				std::cerr << "Unknown argument: " << argv[i] << "\n";
-				rv = 1;
+				rv = -1;
 				break;
 			}
 			i += 2;
@@ -114,7 +137,7 @@ int parseArgs (int argc, char** argv, std::istream& vcf, std::ifstream& vcffile,
 	return rv;
 }
 
-int vcf2geno (std::istream& vcf) {
+int vcf2geno (std::istream& vcf, const int genotype) {
 	int rv = 0;
 	std::string vcfline;
 	std::vector<std::string> vcfvec;
@@ -156,7 +179,7 @@ int vcf2geno (std::istream& vcf) {
 		// print genotypes
 		while (ss >> *iter) {
 			if (nfields_site > 8) {
-				if ((*iter)[1] == '|') { // phased haplotypes
+				if ((*iter)[1] == '|' && !genotype) { // phased haplotypes
 					if (((*iter)[0] == '0' || (*iter)[0] == '1') && ((*iter)[2] == '0' || (*iter)[2] == '1')) {
 						std::cout << (*iter)[0] << (*iter)[2];
 					} else {
@@ -164,7 +187,7 @@ int vcf2geno (std::istream& vcf) {
 						rv = -1;
 						break;
 					}
-				} else if ((*iter)[1] == '/') { // unphased genotypes
+				} else if ((*iter)[1] == '/' || ((*iter)[1] == '|' && genotype)) { // unphased genotypes
 					if ((*iter)[0] == '.') {
 						std::cout << "9";
 					} else if (((*iter)[0] == '0' || (*iter)[0] == '1') && ((*iter)[2] == '0' || (*iter)[2] == '1')) {
@@ -268,13 +291,14 @@ int main (int argc, char** argv) {
 	std::istream vcfstream(vcffile.rdbuf());
 	std::ifstream ratefile;
 	double rate = 0;
+	int genostyle = 0;
 
-	if (!(rv = parseArgs(argc, argv, vcfstream, vcffile, ratefile, rate))) {
+	if (!(rv = parseArgs(argc, argv, vcfstream, vcffile, ratefile, rate, genostyle))) {
 		return 0;
 	} else if (rv == -1) {
 		rv = -1;
 	} else if (rv == 1) {
-		rv = vcf2geno(vcfstream);
+		rv = vcf2geno(vcfstream, genostyle);
 	} else if (rv == 2) {
 		rv = vcf2Snp(vcfstream, ratefile, rate);
 	} else {
