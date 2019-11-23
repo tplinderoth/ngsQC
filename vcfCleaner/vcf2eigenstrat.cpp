@@ -22,7 +22,7 @@ void maininfo () {
 }
 
 void makeGenoInfo () {
-	std::cerr << "\nvcf2eigenstrat makeGeno <vcf file>\n\n"
+	std::cerr << "\nvcf2eigenstrat makeGeno <vcf file | '-' for VCF from STDIN>\n\n"
 	<< "Output: each row is a SNP that contains either two columns per individual corresponding\n"
 	<< "to the 1st and 2nd phased haplotype allele respectively if phased or one column per individual\n"
 	<< "corresponding to the (0,1,2,9) genotype if unphased.\n"
@@ -31,7 +31,7 @@ void makeGenoInfo () {
 
 void makeSnpInfo () {
 	int w = 20;
-	std::cerr << "\nvcf2eigenstrat makeSnp <rate input> <vcf file>\n"
+	std::cerr << "\nvcf2eigenstrat makeSnp <rate input> <vcf file | '-' for VCF from STDIN>\n"
 	<< "\nrate input:\n"
 	<< "--ratefile [FILE]: " << std::setw(w) << std::left << "File with columns (1) chromosome, (2) position, (3) genetic position in cM\n"
 	<< "--rate [FLOAT]: " << std::setw(w) << std::left << "recombination rate in cM/Mb for generating a flat genetic map\n"
@@ -45,7 +45,7 @@ void makeSnpInfo () {
 	<< "\n";
 }
 
-int parseArgs (int argc, char** argv, std::ifstream& vcf, std::ifstream& ratefile, double& rate) {
+int parseArgs (int argc, char** argv, std::istream& vcf, std::ifstream& vcffile, std::ifstream& ratefile, double& rate) {
 
 	int rv = 0;
 
@@ -56,11 +56,15 @@ int parseArgs (int argc, char** argv, std::ifstream& vcf, std::ifstream& ratefil
 
 	// parse VCF file
 	if (argc > 2) {
-		vcf.open(argv[argc-1]);
-		if (!vcf) {
-			std::cerr << "Unable to open VCF file " << argv[argc-1] << "\n";
-			rv = -1;
-			return rv;
+		if (strcmp(argv[argc-1], "-") == 0) {
+			vcf.rdbuf(std::cin.rdbuf());
+		} else {
+			vcffile.open(argv[argc-1]);
+			if (!vcf) {
+				std::cerr << "Unable to open VCF file " << argv[argc-1] << "\n";
+				rv = -1;
+				return rv;
+			}
 		}
 	}
 
@@ -110,7 +114,7 @@ int parseArgs (int argc, char** argv, std::ifstream& vcf, std::ifstream& ratefil
 	return rv;
 }
 
-int vcf2geno (std::ifstream& vcf) {
+int vcf2geno (std::istream& vcf) {
 	int rv = 0;
 	std::string vcfline;
 	std::vector<std::string> vcfvec;
@@ -192,7 +196,7 @@ int vcf2geno (std::ifstream& vcf) {
 	return rv;
 }
 
-int vcf2Snp (std::ifstream& vcf, std::ifstream& ratefile, double rate) {
+int vcf2Snp (std::istream& vcf, std::ifstream& ratefile, double rate) {
 	int rv = 0;
 	std::map<std::string, double> ratemap;
 	std::stringstream ss;
@@ -260,23 +264,24 @@ int vcf2Snp (std::ifstream& vcf, std::ifstream& ratefile, double rate) {
 
 int main (int argc, char** argv) {
 	int rv = 0;
-	std::ifstream vcf;
+	std::ifstream vcffile;
+	std::istream vcfstream(vcffile.rdbuf());
 	std::ifstream ratefile;
 	double rate = 0;
 
-	if (!(rv = parseArgs(argc, argv, vcf, ratefile, rate))) {
+	if (!(rv = parseArgs(argc, argv, vcfstream, vcffile, ratefile, rate))) {
 		return 0;
 	} else if (rv == -1) {
 		rv = -1;
 	} else if (rv == 1) {
-		rv = vcf2geno(vcf);
+		rv = vcf2geno(vcfstream);
 	} else if (rv == 2) {
-		rv = vcf2Snp(vcf, ratefile, rate);
+		rv = vcf2Snp(vcfstream, ratefile, rate);
 	} else {
 		rv = -1;
 	}
 
-	if (vcf) vcf.close();
+	if (vcffile) vcffile.close();
 	if (ratefile) ratefile.close();
 
 	return rv;
