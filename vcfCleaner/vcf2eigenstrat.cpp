@@ -255,7 +255,7 @@ int vcf2Snp (std::istream& vcf, std::ifstream& ratefile, double rate) {
 
 	// process VCF sites
 	std::map<std::string, double>::iterator it;
-	double cmorgans;
+	double morgans;
 	while (!vcf.eof()) {
 
 		// get a new VCF line
@@ -271,14 +271,14 @@ int vcf2Snp (std::istream& vcf, std::ifstream& ratefile, double rate) {
 		std::string chr = vcftok[0].substr(3, vcftok[0].size());
 		if  (!ratemap.empty()) {
 			if ((it = ratemap.find(snp)) != ratemap.end()) {
-				cmorgans = it->second;
+				morgans = it->second/100.0; // convert centimorgans to morgans
 			} else {
 				std::cerr << "WARNING: No rate for VCF position " << vcftok[0] << " " << vcftok[1] << "\n";
 			}
 		} else {
-			cmorgans = rate * atof(vcftok[1].c_str())/1000000.0; // fix this
+			morgans = rate * atof(vcftok[1].c_str())/100000000.0; //
 		}
-		std::cout << snp << "\t" << chr << "\t" << std::setprecision(16) << cmorgans << "\t" << vcftok[1] << "\t" << vcftok[3] << "\t" << vcftok[4] << "\n";
+		std::cout << snp << "\t" << chr << "\t" << std::setprecision(16) << morgans << "\t" << vcftok[1] << "\t" << vcftok[3] << "\t" << vcftok[4] << "\n";
 		if (rv) break;
 	}
 
