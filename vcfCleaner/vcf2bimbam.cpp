@@ -16,17 +16,19 @@
 void vcf2bimbamInfo () {
 	int w=6;
 	std::cerr << "\n"
-	<< "vcf2bimbam [input vcf] [genotype prior]\n"
-	<< "\npriors:\n"
-	<< std::setw(w) << std::left << "hwe" << "Hardy-Weinberg Equilibrium probability of the genotypes given the ALT allele frequency\n"
-	<< std::setw(w) << std::left << "unif" << "Uniform probability for genotypes\n\n"
+	<< "vcf2bimbam [input vcf] ['PL'|'GP'] [genotype prior]\n"
+	<< "\nPL: use PL genotype likelihoods to calculate mean genotype, requires specification of genotype prior\n"
+	<< "GL: use GP genotype probabilities (do not specify genotype prior)\n"
+	<< "\npriors (used only when using genotype likelihoods):\n"
+	<< std::setw(w) << std::left << "hwe:" << "Hardy-Weinberg Equilibrium probability of the genotypes given the ALT allele frequency\n"
+	<< std::setw(w) << std::left << "unif:" << "Uniform probability for genotypes\n\n"
 	<< "BIMBAM output:\n"
 	<< "(1) SNP, (2) ALT, (3) REF, (4..N) Posterior expected genotype\n"
 	<< "Missing genotypes encoded as 'NA'\n"
 	<< "\n";
 }
 
-int parseArgs (int argc, char** argv, std::ifstream &vcf, int &genoprior) {
+int parseArgs (int argc, char** argv, std::ifstream &vcf, std::string &genofmt, int &genoprior) {
 	int rv = 0;
 
 	if (argc < 3) {
@@ -39,13 +41,24 @@ int parseArgs (int argc, char** argv, std::ifstream &vcf, int &genoprior) {
 		std::cerr << "Unable to open input VCF " << argv[1] << "\n";
 		return -1;
 	}
+	genofmt = argv[2];
 
-	if (strcmp(argv[2], "unif") == 0) {
-		genoprior = 0;
-	} else if (strcmp(argv[2], "hwe") == 0) {
-		genoprior = 1;
+	if (genofmt == "GP") {
+	} else if (genofmt == "PL") {
+		if (argc < 4) {
+			std::cout << "Use of PL requires specification of 'hwe' or 'unif' genotype prior\n";
+			return -1;
+		}
+		if (strcmp(argv[3], "unif") == 0) {
+			genoprior = 0;
+		} else if (strcmp(argv[3], "hwe") == 0) {
+			genoprior = 1;
+		} else {
+			std::cerr << "Invalid genotype prior " << genofmt << "\n";
+			return -1;
+		}
 	} else {
-		std::cerr << "Invalid genotype prior " << argv[2] << "\n";
+		std::cerr << genofmt << " is an invalid genotype format (use either 'PL' or 'GP')\n";
 		return -1;
 	}
 
@@ -74,13 +87,36 @@ int plIndex (std::vector<std::string> &vcfvec) {
 	return index;
 }
 
-double calcGeno (double* gl, double* prior) {
+int gpIndex (std::vector<std::string> &vcfvec) {
+	// determine where the GP info is in the FORMAT field
+
+	int index = 0;
+	int gpfound = 0;
+
+	for (unsigned int i=0; i<vcfvec[8].size(); ++i) {
+		if (vcfvec[8][i] == 'G' && vcfvec[8][i+1] == 'P') {
+			gpfound = 1;
+		}
+		if (vcfvec[8][i] == ':') ++index;
+		if (gpfound) break;
+	}
+
+	if (!gpfound) {
+		index = -1;
+		std::cerr << "ERROR: No GP found in FORMAT field for " << vcfvec[0] << " " << vcfvec[1] << "\n";
+	}
+
+	return index;
+}
+
+double calcGenoPost (double* gl, double* prior) {
 	static double d [3];
 	double pdata = 0.0;
 	int i;
 	for (i=0; i<3; ++i) {
 		d[i] = gl[i] * prior[i];
 		pdata += d[i];
+		//std::cout << gl[i] << ", " << prior[i] << ", " << d[i] << "\n"; // debug
 	}
 
 	if (pdata == 0) {
@@ -98,7 +134,7 @@ double calcGeno (double* gl, double* prior) {
 	return postgeno;
 }
 
-int expectGeno (std::vector<std::string> &vcfvec, double* geno, unsigned int nind, double* genoprior) {
+int expectGenoPL (std::vector<std::string> &vcfvec, double* geno, unsigned int nind, double* genoprior) {
 	int rv = 0;
 
 	// find location of PL in format field
@@ -106,6 +142,7 @@ int expectGeno (std::vector<std::string> &vcfvec, double* geno, unsigned int nin
 	if ((plidx = plIndex(vcfvec)) < 0) {
 		return -1;
 	}
+	//std::cout << plidx << "\n";
 
 	// get genotype likelihoods
 	static double pl [3];
@@ -135,6 +172,7 @@ int expectGeno (std::vector<std::string> &vcfvec, double* geno, unsigned int nin
 						plstr[j] = '\0';
 						if (m < 3) {
 							pl[m] = pow(10, -atof(plstr)/10); // convert out of Phred-scale
+							//std::cout << m << ": " << plstr << ", " << pl[m] << "\n"; // debug
 							++m;
 							j = 0;
 						} else {
@@ -150,6 +188,8 @@ int expectGeno (std::vector<std::string> &vcfvec, double* geno, unsigned int nin
 				if (m < 3) {
 					plstr[j] = '\0';
 					pl[m] = pow(10, -atof(plstr)/10); // convert out of phred scale
+					//std::cout << m << ": " << plstr << ", " << pl[m] << "\n"; // debug
+					break;
 				} else {
 					std::cerr << "ERROR: More than 3 PL values for " << vcfvec[0] << " " << vcfvec[1] << " individual " << n << "\n";
 					return -1;
@@ -158,13 +198,93 @@ int expectGeno (std::vector<std::string> &vcfvec, double* geno, unsigned int nin
 				++k;
 			}
 		}
+		//std::cout << pl[0] << ", " << pl[1] << ", " << pl[2] << "\n"; // debug
 
 		// calculate mean genotype
 		if (pl[0] == -9.0) {
 			// missing genotype likelihood information
 			geno[n] = -9;
 		} else {
-			geno[n] = calcGeno(pl, genoprior);
+			geno[n] = calcGenoPost(pl, genoprior);
+			if (geno[n] == -9.0) {
+				std::cerr << "WARNING: Problem calculating genotype for " << vcfvec[0] << " " << vcfvec[1] << " individual " << n << "\n";
+			}
+		}
+
+		++n;
+	}
+
+	return rv;
+}
+
+int expectGenoGP (std::vector<std::string> &vcfvec, double* geno, unsigned int nind) {
+	int rv = 0;
+
+	// find location of GP in format field
+	int gpidx;
+	if ((gpidx = gpIndex(vcfvec)) < 0) {
+		return -1;
+	}
+
+	// get genotype probabilities
+	static double gp [3];
+	static char gpstr [20];
+	static std::vector<std::string>::iterator inditer;
+	unsigned int n=0;
+
+	// loop through all individuals
+	for (inditer=vcfvec.begin()+9; inditer < vcfvec.end(); ++inditer) {
+		if (n >= nind) {
+			std::cerr << "Number of individuals at " << vcfvec[0] << " " << vcfvec[1] << " is greater than number of individuals in header\n";
+			return -1;
+		}
+
+		// loop through individual's information
+		int k = 0;
+		gp[0] = -9;
+		for (unsigned int i=0; i<inditer->size(); ++i) {
+			if (k == gpidx) {
+				// loop through genotype probability information
+				gpstr[0] = '\0';
+				int j = 0, m = 0;
+				while (i < inditer->size()) {
+					if ((*inditer)[i] == ':') {
+						break;
+					} else if ((*inditer)[i] == ',') {
+						gpstr[j] = '\0';
+						if (m < 3) {
+							gp[m] = atof(gpstr);
+							++m;
+							j = 0;
+						} else {
+							std::cerr << "ERROR: More than 3 GP values for " << vcfvec[0] << " " << vcfvec[1] << " individual " << n << "\n";
+							return -1;
+						}
+					} else {
+						gpstr[j] = (*inditer)[i];
+						++j;
+					}
+					++i;
+				}
+				if (m < 3) {
+					gpstr[j] = '\0';
+					gp[m] = atof(gpstr); // convert out of phred scale
+					break;
+				} else {
+					std::cerr << "ERROR: More than 3 GP values for " << vcfvec[0] << " " << vcfvec[1] << " individual " << n << "\n";
+					return -1;
+				}
+			} else if ((*inditer)[i] == ':') {
+				++k;
+			}
+		}
+
+		// calculate mean genotype
+		if (gp[0] == -9.0) {
+			// missing genotype likelihood information
+			geno[n] = -9;
+		} else {
+			geno[n] = 1.0*gp[1] + 2.0*gp[2];
 			if (geno[n] == -9.0) {
 				std::cerr << "WARNING: Problem calculating genotype for " << vcfvec[0] << " " << vcfvec[1] << " individual " << n << "\n";
 			}
@@ -235,7 +355,7 @@ void printGenoInfo (std::vector<std::string> &vcfvec, double* geno, unsigned int
 	}
 }
 
-int processVcf (std::ifstream &vcf, const int priortype) {
+int processVcf (std::ifstream &vcf, const std::string &genofmt, const int priortype) {
 	int rv = 0;
 	std::string vcfline;
 	std::vector<std::string> vcfvec;
@@ -277,17 +397,30 @@ int processVcf (std::ifstream &vcf, const int priortype) {
 			++iter;
 		}
 
-		// get alternate allele frequency from INFO field for prior
-		if (priortype == 1) {
-			if ((af=getaf(vcfvec)) < 0.0) {
+		if (genofmt == "PL") {
+			// get alternate allele frequency from INFO field for prior
+			if (priortype == 1) {
+				if ((af=getaf(vcfvec)) < 0.0) {
+					rv = -1;
+					break;
+				}
+				hweprior(gprior, af);
+			}
+
+			// calculate expected genotypes from likelihoods
+			if (expectGenoPL(vcfvec, geno, nind, gprior)) {
 				rv = -1;
 				break;
 			}
-			hweprior(gprior, af);
-		}
+		} else if (genofmt == "GP") {
+			// calculate expected genotype from probabilities
+			if (expectGenoGP(vcfvec, geno, nind)) {
+				rv = -1;
+				break;
+			}
 
-		// calculate expected genotypes
-		if (expectGeno(vcfvec, geno, nind, gprior)) {
+		} else {
+			std::cerr << genofmt << " is an unknown genotype format\n";
 			rv = -1;
 			break;
 		}
@@ -304,9 +437,10 @@ int main(int argc, char** argv) {
 	int rv = 0;
 	std::ifstream vcf;
 	int genoprior; // 0=unif, 1=hwe
+	std::string genofmt; // PL or GP
 
-	if (!parseArgs(argc, argv, vcf, genoprior)) {
-		processVcf(vcf, genoprior);
+	if (!parseArgs(argc, argv, vcf, genofmt, genoprior)) {
+		processVcf(vcf, genofmt, genoprior);
 	}
 
 	if (vcf.is_open()) vcf.close();
