@@ -6,6 +6,7 @@
  * 2) implement accurate multiallelic filtering, e.g. maf filtering
  * 3) Boost does not play well with bgzipped files (segfaults or leaves off the last line), so need to
  * switch over to using htslib to parse VCF. Gzipped files are fine.
+ * 4) Need to update VCF header to reflect FILTER annotations
  */
 
 #include "vcfCleaner.h"
