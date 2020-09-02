@@ -18,7 +18,7 @@ void vcf2bimbamInfo () {
 	std::cerr << "\n"
 	<< "vcf2bimbam [input vcf] ['PL'|'GP'] [genotype prior]\n"
 	<< "\nPL: use PL genotype likelihoods to calculate mean genotype, requires specification of genotype prior\n"
-	<< "GL: use GP genotype probabilities (do not specify genotype prior)\n"
+	<< "GP: use GP genotype probabilities (do not specify genotype prior)\n"
 	<< "\npriors (used only when using genotype likelihoods):\n"
 	<< std::setw(w) << std::left << "hwe:" << "Hardy-Weinberg Equilibrium probability of the genotypes given the ALT allele frequency\n"
 	<< std::setw(w) << std::left << "unif:" << "Uniform probability for genotypes\n\n"
