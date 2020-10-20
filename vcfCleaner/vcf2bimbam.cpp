@@ -284,7 +284,8 @@ int expectGenoGP (std::vector<std::string> &vcfvec, double* geno, unsigned int n
 			// missing genotype likelihood information
 			geno[n] = -9;
 		} else {
-			geno[n] = 1.0*gp[1] + 2.0*gp[2];
+			double gpsum = gp[0] + gp[1] + gp[2];
+			geno[n] = gpsum > 0 ? (gp[1] + 2.0*gp[2])/gpsum : -9;
 			if (geno[n] == -9.0) {
 				std::cerr << "WARNING: Problem calculating genotype for " << vcfvec[0] << " " << vcfvec[1] << " individual " << n << "\n";
 			}
