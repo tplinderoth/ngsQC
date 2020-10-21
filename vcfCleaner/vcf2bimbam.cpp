@@ -217,7 +217,7 @@ int expectGenoPL (std::vector<std::string> &vcfvec, double* geno, unsigned int n
 	return rv;
 }
 
-int expectGenoGP (std::vector<std::string> &vcfvec, double* geno, unsigned int nind) {
+int expectGenoGP (std::vector<std::string> &vcfvec, double* geno, unsigned int nind, int* islog) {
 	int rv = 0;
 
 	// find location of GP in format field
@@ -231,6 +231,7 @@ int expectGenoGP (std::vector<std::string> &vcfvec, double* geno, unsigned int n
 	static char gpstr [20];
 	static std::vector<std::string>::iterator inditer;
 	unsigned int n=0;
+	double gpsum = 0;
 
 	// loop through all individuals
 	for (inditer=vcfvec.begin()+9; inditer < vcfvec.end(); ++inditer) {
@@ -280,15 +281,25 @@ int expectGenoGP (std::vector<std::string> &vcfvec, double* geno, unsigned int n
 		}
 
 		// calculate mean genotype
-		if (gp[0] == -9.0) {
+		if (gp[0] == -9.0 || (gp[0] == 0 && gp[1] == 0 && gp[2] == 0)) {
 			// missing genotype likelihood information
 			geno[n] = -9;
 		} else {
-			double gpsum = gp[0] + gp[1] + gp[2];
-			geno[n] = gpsum > 0 ? (gp[1] + 2.0*gp[2])/gpsum : -9;
-			if (geno[n] == -9.0) {
-				std::cerr << "WARNING: Problem calculating genotype for " << vcfvec[0] << " " << vcfvec[1] << " individual " << n << "\n";
+			if (!islog) {
+				gpsum = gp[0]+gp[1]+gp[2];
+				if (gpsum > 0) {
+					islog = new int;
+					*islog = gpsum > 1 ? 1:0;
+				} else {
+					std::cerr << "ERROR: Invalid GP scaling " << gp[0] << "," << gp[1] << "," << gp[2] << "\n";
+					return -1;
+				}
 			}
+			if (*islog) {
+				for (int i=0; i<3; i++) gp[i] = pow(10.0,-gp[i]/10.0);
+			}
+			gpsum = gp[0] + gp[1] + gp[2];
+			geno[n] = (gp[1] + 2.0*gp[2])/gpsum;
 		}
 
 		++n;
@@ -385,6 +396,8 @@ int processVcf (std::ifstream &vcf, const std::string &genofmt, const int priort
 	double gprior [3] = {1.0/3, 1.0/3, 1.0/3};
 	double * geno = new double[nind];
 
+	int* islog = NULL; // indicator for whether GPs are in log scaling
+
 	while (!vcf.eof()) {
 
 		// get a new site and vectorize it
@@ -415,7 +428,7 @@ int processVcf (std::ifstream &vcf, const std::string &genofmt, const int priort
 			}
 		} else if (genofmt == "GP") {
 			// calculate expected genotype from probabilities
-			if (expectGenoGP(vcfvec, geno, nind)) {
+			if (expectGenoGP(vcfvec, geno, nind, islog)) {
 				rv = -1;
 				break;
 			}
@@ -431,6 +444,7 @@ int processVcf (std::ifstream &vcf, const std::string &genofmt, const int priort
 	}
 
 	delete [] geno;
+	if (islog) delete islog;
 	return rv;
 }
 
