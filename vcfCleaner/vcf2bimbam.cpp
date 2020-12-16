@@ -16,7 +16,7 @@
 void vcf2bimbamInfo () {
 	int w=6;
 	std::cerr << "\n"
-	<< "vcf2bimbam [input vcf] ['PL'|'GP'] [genotype prior]\n"
+	<< "vcf2bimbam <input VCF file | '-' for piped VCF input> <'PL'|'GP'> <genotype prior>\n"
 	<< "\nPL: use PL genotype likelihoods to calculate mean genotype, requires specification of genotype prior\n"
 	<< "GP: use GP genotype probabilities (do not specify genotype prior)\n"
 	<< "\npriors (used only when using genotype likelihoods):\n"
@@ -28,7 +28,7 @@ void vcf2bimbamInfo () {
 	<< "\n";
 }
 
-int parseArgs (int argc, char** argv, std::ifstream &vcf, std::string &genofmt, int &genoprior) {
+int parseArgs (int argc, char** argv, std::istream &vcfstream, std::ifstream &vcf, std::string &genofmt, int &genoprior) {
 	int rv = 0;
 
 	if (argc < 3) {
@@ -36,11 +36,20 @@ int parseArgs (int argc, char** argv, std::ifstream &vcf, std::string &genofmt, 
 		return 1;
 	}
 
-	vcf.open(argv[1]);
-	if (!vcf) {
-		std::cerr << "Unable to open input VCF " << argv[1] << "\n";
+	if (strcmp(argv[1],"-") == 0) {
+		vcfstream.rdbuf(std::cin.rdbuf());
+	} else {
+		vcf.open(argv[1]);
+		if (!vcf) {
+			std::cerr << "Unable to read input VCF " << argv[1] << "\n";
+			return -1;
+		}
+	}
+	if (!vcfstream) {
+		std::cerr << "Problem with input VCF stream\n";
 		return -1;
 	}
+
 	genofmt = argv[2];
 
 	if (genofmt == "GP") {
@@ -367,18 +376,18 @@ void printGenoInfo (std::vector<std::string> &vcfvec, double* geno, unsigned int
 	}
 }
 
-int processVcf (std::ifstream &vcf, const std::string &genofmt, const int priortype) {
+int processVcf (std::istream &vcfstream, const std::string &genofmt, const int priortype) {
 	int rv = 0;
 	std::string vcfline;
 	std::vector<std::string> vcfvec;
 	std::vector<std::string>::iterator iter;
 
 	// skip VCF header and set up vector to hold tokens
-	getline(vcf, vcfline);
+	getline(vcfstream, vcfline);
 	while (!vcfline.empty()) {
 		if (vcfline[0] != '#' || vcfline[1] != '#')
 			break;
-		getline(vcf, vcfline);
+		getline(vcfstream, vcfline);
 	}
 
 	std::stringstream ss(vcfline);
@@ -398,11 +407,9 @@ int processVcf (std::ifstream &vcf, const std::string &genofmt, const int priort
 
 	int* islog = NULL; // indicator for whether GPs are in log scaling
 
-	while (!vcf.eof()) {
+	while (getline(vcfstream, vcfline)) {
 
 		// get a new site and vectorize it
-		getline(vcf,vcfline);
-		if (vcfline.empty()) break;
 		ss.str(std::string());
 		ss.clear();
 		ss.str(vcfline);
@@ -449,13 +456,14 @@ int processVcf (std::ifstream &vcf, const std::string &genofmt, const int priort
 }
 
 int main(int argc, char** argv) {
-	int rv = 0;
+	int rv = 0;;
 	std::ifstream vcf;
+	std::istream vcfstream(vcf.rdbuf());
 	int genoprior; // 0=unif, 1=hwe
 	std::string genofmt; // PL or GP
 
-	if (!parseArgs(argc, argv, vcf, genofmt, genoprior)) {
-		processVcf(vcf, genofmt, genoprior);
+	if (!parseArgs(argc, argv, vcfstream, vcf, genofmt, genoprior)) {
+		processVcf(vcfstream, genofmt, genoprior);
 	}
 
 	if (vcf.is_open()) vcf.close();
