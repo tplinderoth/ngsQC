@@ -421,20 +421,28 @@ void writeVcf (vcfrecord* vcfrec, std::ofstream &os, const int &siteOnly, const 
 	if (vcfrec->qcfail == 0 && vcfrec->fields[6] == ".") {
 		os << "PASS\t";
 	} else {
-		if (printFilter == 2 && vcfrec->fields[6] != ".") os << vcfrec->fields[6] << ",";
-		int j = 0;
-		for (it = vcfrec->flags.begin(); it != vcfrec->flags.end(); ++it) {
-			if (it->second) {
-				os << it->first;
-				++j;
-				if (j < vcfrec->qcfail) {
-					os << ",";
-				} else {
-					os << "\t";
-					break;
-				}
+		std::map<std::string, int> seen;
+		std::string newfilters("");
+		if (printFilter == 2 && vcfrec->fields[6] != ".") {
+			std::stringstream ss(vcfrec->fields[6]);
+			while(ss.good()) {
+				std::string substr;
+				getline(ss,substr,',');
+				newfilters += ',' + substr;
+				seen[substr] = 1;
 			}
 		}
+		int j = 0;
+		for (it = vcfrec->flags.begin(); it != vcfrec->flags.end(); ++it) {
+			// make new string
+			if (it->second && seen.find(it->first) != seen.end()) {
+				newfilters += ',' + it->first;
+				++j;
+				if (j >= vcfrec->qcfail) break;
+			}
+		}
+		newfilters.erase(0,1);
+		os << newfilters << "\t";
 	}
 
 	// print INFO
