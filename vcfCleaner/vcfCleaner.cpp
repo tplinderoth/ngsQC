@@ -435,7 +435,7 @@ void writeVcf (vcfrecord* vcfrec, std::ofstream &os, const int &siteOnly, const 
 		int j = 0;
 		for (it = vcfrec->flags.begin(); it != vcfrec->flags.end(); ++it) {
 			// make new string
-			if (it->second && seen.find(it->first) != seen.end()) {
+			if (it->second && seen.find(it->first) == seen.end()) {
 				newfilters += ',' + it->first;
 				++j;
 				if (j >= vcfrec->qcfail) break;
