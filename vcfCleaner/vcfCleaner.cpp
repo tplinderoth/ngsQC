@@ -427,8 +427,8 @@ void writeVcf (vcfrecord* vcfrec, std::ofstream &os, const int &siteOnly, const 
 			std::stringstream ss(vcfrec->fields[6]);
 			while(ss.good()) {
 				std::string substr;
-				getline(ss,substr,',');
-				newfilters += ',' + substr;
+				getline(ss,substr,';');
+				newfilters += ';' + substr;
 				seen[substr] = 1;
 			}
 		}
@@ -436,7 +436,7 @@ void writeVcf (vcfrecord* vcfrec, std::ofstream &os, const int &siteOnly, const 
 		for (it = vcfrec->flags.begin(); it != vcfrec->flags.end(); ++it) {
 			// make new string
 			if (it->second && seen.find(it->first) == seen.end()) {
-				newfilters += ',' + it->first;
+				newfilters += ';' + it->first;
 				++j;
 				if (j >= vcfrec->qcfail) break;
 			}
