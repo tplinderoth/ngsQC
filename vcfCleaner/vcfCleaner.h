@@ -58,6 +58,8 @@ int parseFormat (std::vector<std::string> &vcfvec, int* index);
 
 int extractIndInfo (std::vector<std::string> &vcfvec, size_t* indcounts, unsigned int min_indcov, int verbose);
 
+void vcfHeader (char** argv, int argc, std::istream &instream, std::ofstream &outvcf, std::string &vcfline);
+
 //size_t nCoveredInd (std::vector<std::string> &vcfvec, unsigned int min_indcov, int* rv);
 
 void siteType (std::vector<std::string> & vcfvec, int* isMultiAllelic, int* isIndel);

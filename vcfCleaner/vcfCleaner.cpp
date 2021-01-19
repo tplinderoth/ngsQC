@@ -20,6 +20,8 @@
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
+#include <map>
+#include <ctime>
 
 int main (int argc, char** argv) {
 	int rv = 0;
@@ -94,6 +96,67 @@ void gatkinfo (int &biallelic, int &allsites, int &allsites_vcf, unsigned int &m
 	<< "\n";
 }
 
+void vcfHeader (char** argv, int argc, std::istream &instream, std::ofstream &outvcf, std::string &vcfline) {
+
+	std::map<std::string, std::pair< std::string, int> > filters;
+	filters["Missing"]=std::pair<std::string, int>("ID=Missing,Description=\"No data for any individuals\"",1);
+	filters["UknownRef"]=std::pair<std::string, int>("ID=UknownRef,Description=\"Unrecognized reference allele\"",1);
+	filters["MultiAllele"]=std::pair<std::string, int>("ID=MultiAllele,Description=\"Three or more alleles\"",0);
+	filters["Indel"]=std::pair<std::string, int>("ID=Indel,Description=\"Indel allele\"",0);
+	filters["LowQual"]=std::pair<std::string, int>("ID=LowQual,Description=\"Low quality\"",1);
+	filters["LowDP"]=std::pair<std::string, int>("ID=LowDP,Description=\"Low approximate read depth\"",1);
+	filters["HighDP"]=std::pair<std::string, int>("ID=HighDP,Description=\"High approximate read depth\"",1);
+	filters["LowIndDP"]=std::pair<std::string, int>("ID=LowIndDP,Description=\"Low number of individuals with sufficient coverage\"",1);
+	filters["LowGeno"]=std::pair<std::string, int>("ID=LowGeno,Description=\"Low number of individuals with called genotypes\"",1);
+	filters["LowMQ"]=std::pair<std::string, int>("ID=LowMQ,Description=\"Low RMS mapping quality\"",1);
+	filters["MapQualBias"]=std::pair<std::string, int>("ID=MapQualBias,Description=\"Map quality bias between ref and alt alleles\"",1);
+	filters["PosBias"]=std::pair<std::string, int>("ID=PosBias,Description=\"Read position bias between ref and alt alleles\"",1);
+	filters["FS"]=std::pair<std::string, int>("ID=FS,Description=\"Strand bias\"",1);
+	filters["BaseQualBias"]=std::pair<std::string, int>("ID=BaseQualBias,Description=\"Quality bias between ref and alt alleles\"",1);
+	filters["LowQD"]=std::pair<std::string, int>("ID=LowQD,Description=\"Low variant qualiity by depth\"",1);
+	filters["ExcessHet"]=std::pair<std::string, int>("ID=ExcessHet,Description=\"Excess heterozygosity\"",1);
+	filters["PASS"]=std::pair<std::string, int>("ID=PASS,Description=\"All filters passed\"",1);
+
+	// vcfCleaner command line input
+	time_t time_now = time(0);
+	std::string dt(ctime(&time_now));
+	std::string usercmd("##vcfCleanerCommand=");
+	usercmd += argv[1];
+	for (int i=2; i<argc; ++i) {
+		usercmd += " ";
+		usercmd += argv[i];
+		if (strcmp(argv[i],"-biallelic") == 0) {
+			filters["MultiAllele"].second = 1;
+		} else if (strcmp(argv[i],"-rmvIndels") == 0) {
+			filters["Indel"].second = 1;
+		}
+	}
+	usercmd += "; Date=" + dt;
+
+	// process lines of VCF header
+	std::map<std::string, std::pair< std::string, int> >::iterator it;
+	while (getline(instream, vcfline)) {
+		if (vcfline[0] != '#' || vcfline[1] != '#') break;
+		outvcf << vcfline << "\n";
+		if (vcfline.size() > 8 && vcfline.substr(2,6) == "FILTER") {
+			std::string head_filter = vcfline.substr(13,(vcfline.find(",")-13));
+			if ((it = filters.find(head_filter)) != filters.end()) {
+				filters[head_filter].second = 0;
+			}
+		}
+	}
+
+
+	// print new filters
+	outvcf << usercmd;
+	for (it = filters.begin(); it != filters.end(); ++it) {
+		if (it->second.second == 1) outvcf << "##FILTER=<" << it->second.first << ">" << "\n";
+	}
+
+	// print samples line
+	outvcf << vcfline << "\n";
+}
+
 int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf, std::ofstream &passpos, std::ofstream &failpos) {
 	int rv = 0;
 
@@ -157,11 +220,7 @@ int gatkvcf (int argc, char** argv, std::ifstream &invcf, std::ofstream &outvcf,
 	std::string vcfline;
 
 	// print headers and set number of vcf fields
-	while (getline(instream, vcfline)) {
-		outvcf << vcfline << "\n";
-		if (vcfline[0] != '#' || vcfline[1] != '#')
-			break;
-	}
+	vcfHeader(argv, argc, instream, outvcf, vcfline);
 
 	std::stringstream ss(vcfline);
 	std::string tok;
@@ -344,7 +403,7 @@ int recordSite (vcfrecord* site, region &keep, std::ofstream &vcfstream, std::of
 				// variant VCF with FILTER annotation
 				writeVcf(site, vcfstream, siteOnly, printFilter);
 			} else if (site->qcfail == 0) {
-				// write only variants sites that pass filters
+				// write only variant sites that pass filters
 				writeVcf(site, vcfstream, siteOnly, printFilter);
 			}
 		}
