@@ -8,7 +8,10 @@ Extracts the following stats from a BAM file:
 * Total depth
 * Average map quality
 * RMS map quality
-* Fraction MQ 0 reads
+* Fraction of reads with map quality of zero
+* Average base quality
+* RMS base quality
+* Fraction of reads with base quality of zero
 
 ## Compile:
 
