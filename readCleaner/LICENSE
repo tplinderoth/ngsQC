@@ -1,3 +1,9 @@
+All original code for this software is available to you under the GPL v3
+license, below. All software dependencies (super_deduper, cutadapt, pear,
+bowtie2, fastqc) are available under their respective licenses.
+
+---------------------------------------------------------------------------
+
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 
