@@ -9,7 +9,7 @@ ngsQC is a collection of programs for quality control of next-generation sequenc
 
 * readCleaner is a C++ program for fastq quality-control.
 
-* bamstats is a program for extracting quality information from one or more BAM files.
+* bamstats is a program for extracting base and mapping quality information from one or more BAM files.
 
 ## Installation
 
