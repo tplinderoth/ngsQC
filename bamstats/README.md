@@ -6,7 +6,7 @@ bamstats
 Extracts the following stats from a BAM file:
 
 * Total depth
-* Average mapping and base qualities
+* Average base and mapping qualities
 * Root mean square (RMS) base and mapping qualities
 * Fraction of base quality zero and mapping quality zero reads
 * Number of samples with data
